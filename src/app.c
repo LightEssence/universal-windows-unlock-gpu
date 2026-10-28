@@ -7,6 +7,7 @@
 #include "display_release.h"
 #include "unlock_engine.h"
 #include "logger.h"
+#include "asset_loader.h"
 
 EFI_SYSTEM_TABLE        *gST = NULL;
 EFI_BOOT_SERVICES       *gBS = NULL;
@@ -149,8 +150,14 @@ EFI_STATUS EFIAPI UefiMain(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable
     gRT = SystemTable->RuntimeServices;
     gImageHandle = ImageHandle;
 
-    /* Initialize persistent file logger on USB: \AD104-UNLOCK\RUNxxxx.TXT */
+    /* Initialize persistent file logger on USB: \UNLOCK-LOGS\RUNxxxx.TXT */
     LoggerInit(ImageHandle);
+
+    /* Load V67 firmware payloads from USB into host RAM (Zero-Flash) */
+    EFI_STATUS a_status = LoadFirmwareAssets(ImageHandle);
+    if (EFI_ERROR(a_status)) {
+        LogWrite("[!] LoadFirmwareAssets returned status=%#llx\n", (unsigned long long)a_status);
+    }
 
     if (gST->ConOut) {
         gST->ConOut->ClearScreen(gST->ConOut);

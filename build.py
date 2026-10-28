@@ -12,7 +12,7 @@ GPU_UNLOCK_ROOT = ROOT.parent
 W64DEVKIT = GPU_UNLOCK_ROOT / "tools" / "w64devkit" / "bin"
 GCC = str(W64DEVKIT / "gcc.exe")
 LD = str(W64DEVKIT / "x86_64-w64-mingw32-ld.exe")
-EDK2_INC = GPU_UNLOCK_ROOT / "gpu-unlock-ada" / "windows" / "ad104-gigabyte-x99" / "vendor" / "edk2" / "Include"
+EDK2_INC = PROJECT_DIR / "vendor" / "edk2" / "Include"
 
 BUILD_DIR = PROJECT_DIR / "build"
 DIST_DIR = PROJECT_DIR / "dist" / "EFI" / "BOOT"
@@ -22,35 +22,49 @@ DIST_DIR.mkdir(parents=True, exist_ok=True)
 flags = [
     "-std=c11", "-O2", "-Wall", "-Wextra",
     "-Wno-unused-parameter", "-Wno-misleading-indentation",
-    "-DGU_UEFI_PORT",
+    "-D__KERNEL__", "-DGU_UEFI_PORT", "-DGU_AD104_TRANSACTION",
+    "-DGU_ENTRY_LATCHED_SS1_FULL",
+    f"-I{PROJECT_DIR}",
     f"-I{PROJECT_DIR / 'include'}",
+    f"-I{PROJECT_DIR / 'compat'}",
     f"-I{EDK2_INC}",
     f"-I{EDK2_INC / 'X64'}",
     "-ffreestanding", "-fno-builtin", "-fno-stack-protector",
-    "-mno-stack-arg-probe", "-mno-red-zone", "-fshort-wchar"
+    "-mno-stack-arg-probe", "-mno-red-zone", "-fshort-wchar", "-fstack-usage"
 ]
 
 sources = [
-    "format",
-    "logger",
-    "sha256",
-    "pci_scan",
-    "vbios_loader",
-    "vbios_parser",
-    "display_release",
-    "unlock_engine",
-    "app"
+    "src/format",
+    "src/logger",
+    "src/sha256",
+    "src/runtime",
+    "src/compat",
+    "src/port",
+    "src/profile",
+    "src/checks",
+    "src/asset_loader",
+    "src/pci_scan",
+    "src/vbios_loader",
+    "src/vbios_parser",
+    "src/display_release",
+    "vendor/unlock_610",
+    "vendor/prep_610",
+    "vendor/layout_610",
+    "vendor/vbios_610",
+    "vendor/gfw_eval",
+    "src/unlock_engine",
+    "src/app"
 ]
 
 objects = []
-print("=== COMPILING C MODULES (UNIVERSAL MULTI-GPU UNLOCK) ===")
+print("=== COMPILING C MODULES (UNIVERSAL MULTI-GPU UNLOCK ENGINE) ===")
 for s in sources:
-    obj_name = f"{s}.o"
+    obj_name = s.replace('/', '_') + '.o'
     obj_path = BUILD_DIR / obj_name
-    src_path = PROJECT_DIR / "src" / f"{s}.c"
+    src_path = PROJECT_DIR / f"{s}.c"
     cmd = [GCC] + flags + ["-c", str(src_path), "-o", str(obj_path)]
     print(f"  [CC] {s}.c -> {obj_name}")
-    res = subprocess.run(cmd)
+    res = subprocess.run(cmd, cwd=str(PROJECT_DIR))
     if res.returncode != 0:
         print(f"[!] Compilation error in {s}.c")
         sys.exit(1)
@@ -64,7 +78,7 @@ link_cmd = [
     "-o", str(efi_out)
 ] + objects
 
-res = subprocess.run(link_cmd)
+res = subprocess.run(link_cmd, cwd=str(PROJECT_DIR))
 if res.returncode != 0:
     print("[!] Linking failed")
     sys.exit(1)

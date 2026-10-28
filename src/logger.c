@@ -88,6 +88,28 @@ VOID LogWrite(CONST CHAR8 *format, ...)
     }
 }
 
+VOID GuLog(const char *format, ...)
+{
+    CHAR8 buffer[2048];
+    va_list args;
+    va_start(args, format);
+    size_t len = FormatV(buffer, sizeof(buffer), format, args);
+    va_end(args);
+
+    if (len == (size_t)-1 || len >= sizeof(buffer)) return;
+
+    if (g_LogFile) {
+        UINTN bytes = len;
+        g_LogFile->Write(g_LogFile, &bytes, buffer);
+        g_LogFile->Flush(g_LogFile);
+    }
+}
+
+VOID GuLogText(const char *text)
+{
+    GuLog("%s", text);
+}
+
 VOID LoggerClose(VOID)
 {
     if (g_LogFile) {

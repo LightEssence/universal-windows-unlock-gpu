@@ -1,6 +1,6 @@
-/* SPDX-License-Identifier: GPL-2.0-only */
 #include "sha256.h"
 
+/* FIPS 180-4, sections 4.2.2 and 6.2. All arithmetic is unsigned. */
 static const UINT32 RoundConstants[64] = {
     0x428a2f98u, 0x71374491u, 0xb5c0fbcfu, 0xe9b5dba5u,
     0x3956c25bu, 0x59f111f1u, 0x923f82a4u, 0xab1c5ed5u,
@@ -20,7 +20,7 @@ static const UINT32 RoundConstants[64] = {
     0x90befffau, 0xa4506cebu, 0xbef9a3f7u, 0xc67178f2u
 };
 
-static inline UINT32 RotateRight(UINT32 Value, unsigned Bits)
+static UINT32 RotateRight(UINT32 Value, unsigned Bits)
 {
     return (Value >> Bits) | (Value << (32u - Bits));
 }
@@ -28,10 +28,17 @@ static inline UINT32 RotateRight(UINT32 Value, unsigned Bits)
 static VOID Transform(UINT32 State[8], const UINT8 Block[64])
 {
     UINT32 Words[64];
-    UINT32 A = State[0], B = State[1], C = State[2], D = State[3];
-    UINT32 E = State[4], F = State[5], G = State[6], H = State[7];
+    UINT32 A = State[0];
+    UINT32 B = State[1];
+    UINT32 C = State[2];
+    UINT32 D = State[3];
+    UINT32 E = State[4];
+    UINT32 F = State[5];
+    UINT32 G = State[6];
+    UINT32 H = State[7];
     unsigned Index;
 
+    /* Byte loads avoid alignment and host-endianness assumptions. */
     for (Index = 0; Index < 16; ++Index) {
         Words[Index] = ((UINT32)Block[4 * Index] << 24) |
                        ((UINT32)Block[4 * Index + 1] << 16) |
@@ -53,14 +60,26 @@ static VOID Transform(UINT32 State[8], const UINT8 Block[64])
         UINT32 Temp1 = H + Big1 + Choice + RoundConstants[Index] + Words[Index];
         UINT32 Temp2 = Big0 + Majority;
 
-        H = G; G = F; F = E; E = D + Temp1;
-        D = C; C = B; B = A; A = Temp1 + Temp2;
+        H = G;
+        G = F;
+        F = E;
+        E = D + Temp1;
+        D = C;
+        C = B;
+        B = A;
+        A = Temp1 + Temp2;
     }
-    State[0] += A; State[1] += B; State[2] += C; State[3] += D;
-    State[4] += E; State[5] += F; State[6] += G; State[7] += H;
+    State[0] += A;
+    State[1] += B;
+    State[2] += C;
+    State[3] += D;
+    State[4] += E;
+    State[5] += F;
+    State[6] += G;
+    State[7] += H;
 }
 
-VOID ComputeSha256(const VOID *Data, UINTN Size, UINT8 Digest[32])
+VOID GuSha256(const VOID *Data, UINTN Size, UINT8 Digest[32])
 {
     UINT32 State[8] = {
         0x6a09e667u, 0xbb67ae85u, 0x3c6ef372u, 0xa54ff53au,
@@ -91,7 +110,7 @@ VOID ComputeSha256(const VOID *Data, UINTN Size, UINT8 Digest[32])
     }
     Transform(State, Tail);
     for (Index = 0; Index < 8; ++Index) {
-        Digest[4 * Index]     = (UINT8)(State[Index] >> 24);
+        Digest[4 * Index] = (UINT8)(State[Index] >> 24);
         Digest[4 * Index + 1] = (UINT8)(State[Index] >> 16);
         Digest[4 * Index + 2] = (UINT8)(State[Index] >> 8);
         Digest[4 * Index + 3] = (UINT8)State[Index];
@@ -100,32 +119,49 @@ VOID ComputeSha256(const VOID *Data, UINTN Size, UINT8 Digest[32])
 
 static int HexValue(char Character)
 {
-    if (Character >= '0' && Character <= '9') return Character - '0';
-    if (Character >= 'a' && Character <= 'f') return Character - 'a' + 10;
-    if (Character >= 'A' && Character <= 'F') return Character - 'A' + 10;
+    if (Character >= '0' && Character <= '9') {
+        return Character - '0';
+    }
+    if (Character >= 'a' && Character <= 'f') {
+        return Character - 'a' + 10;
+    }
+    if (Character >= 'A' && Character <= 'F') {
+        return Character - 'A' + 10;
+    }
     return -1;
 }
 
-BOOLEAN VerifySha256(const VOID *Data, UINTN Size, const char *Hex64)
+BOOLEAN GuHashMatches(const VOID *Data, UINTN Size, const char *Hex64)
 {
-    UINT8 Expected[32], Actual[32];
+    UINT8 Expected[32];
+    UINT8 Actual[32];
     UINT8 Difference = 0;
     unsigned Index;
 
-    if (!Hex64 || (!Data && Size != 0) || ((UINT64)Size > (~(UINT64)0 >> 3))) {
+    if (Hex64 == NULL || (Data == NULL && Size != 0) ||
+        (UINT64)Size > (~(UINT64)0 >> 3)) {
         return FALSE;
     }
     for (Index = 0; Index < 32; ++Index) {
         int High = HexValue(Hex64[2 * Index]);
-        int Low  = HexValue(Hex64[2 * Index + 1]);
-        if (High < 0 || Low < 0) return FALSE;
+        int Low;
+
+        /* Stop before the next read when a short string reaches its NUL. */
+        if (High < 0) {
+            return FALSE;
+        }
+        Low = HexValue(Hex64[2 * Index + 1]);
+        if (Low < 0) {
+            return FALSE;
+        }
         Expected[Index] = (UINT8)((High << 4) | Low);
     }
-    if (Hex64[64] != '\0') return FALSE;
-    ComputeSha256(Data, Size, Actual);
+    if (Hex64[64] != '\0') {
+        return FALSE;
+    }
+    GuSha256(Data, Size, Actual);
     for (Index = 0; Index < 32; ++Index) {
-        Difference |= (Actual[Index] ^ Expected[Index]);
+        Difference |= Actual[Index] ^ Expected[Index];
     }
     return Difference == 0 ? TRUE : FALSE;
 }
-
