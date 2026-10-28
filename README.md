@@ -1,5 +1,7 @@
 # Universal Multi-GPU Windows Unlock Engine (Ampere & Ada Lovelace)
 
+[English](README_EN.md) | [Русский](README.md)
+
 > **100% Volatile In-RAM Unlock — Zero Physical SPI Flash Writes.**  
 > Безопасная энергозависимая разблокировка полной вычислительной производительности GPU (FP32 / FP16 / BF16 Tensor Cores) для Windows 10/11 через автономный UEFI-загрузчик.  
 > *Создано на основе и в развитие кодовой базы проекта [JustAResearcher/gpu-unlock-ada](https://github.com/JustAResearcher/gpu-unlock-ada).*
