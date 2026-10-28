@@ -1,7 +1,8 @@
 # Universal Multi-GPU Windows Unlock Engine (Ampere & Ada Lovelace)
 
 > **100% Volatile In-RAM Unlock — Zero Physical SPI Flash Writes.**  
-> Безопасная энергозависимая разблокировка полной вычислительной производительности GPU (FP32 / FP16 / BF16 Tensor Cores) для Windows 10/11 через автономный UEFI-загрузчик.
+> Безопасная энергозависимая разблокировка полной вычислительной производительности GPU (FP32 / FP16 / BF16 Tensor Cores) для Windows 10/11 через автономный UEFI-загрузчик.  
+> *Создано на основе и в развитие кодовой базы проекта [JustAResearcher/gpu-unlock-ada](https://github.com/JustAResearcher/gpu-unlock-ada).*
 
 ---
 
@@ -160,13 +161,16 @@ python build.py
 
 Разработка данного загрузчика опирается на фундаментальные исследования и открытые исходные коды:
 
-1. **[NVIDIA Open GPU Kernel Modules](https://github.com/NVIDIA/open-gpu-kernel-modules)**  
+1. **[JustAResearcher/gpu-unlock-ada](https://github.com/JustAResearcher/gpu-unlock-ada)** — **Базовый первоисточник (Base Upstream Repository)**  
+   Искренняя благодарность автору за фундаментальную работу по адаптации алгоритма разблокировки для архитектуры Ada Lovelace, структуру инжекции транзакций V67 Falcon и первую реализацию под UEFI. Настоящий репозиторий развивает и обобщает эти наработки в универсальный мульти-GPU загрузчик (поддержка Multi-GPU, одновременная работа Ampere + Ada, независимость от специфики плат и ACPI, синхронизация PCI Command/BME).
+
+2. **[NVIDIA Open GPU Kernel Modules](https://github.com/NVIDIA/open-gpu-kernel-modules)**  
    Официальные открытые модули ядра NVIDIA, документация протоколов инициализации GSP (GPU System Processor) и Falcon микроконтроллеров.
 
-2. **Проект `gpu-unlock` и исследовательское сообщество V67 Falcon**  
+3. **Проект `gpu-unlock` и исследовательское сообщество V67 Falcon**  
    Исследования формата разметки прошивок Falcon, алгоритмов валидации SEC2, внедрения промежуточного загрузчика V67 и энергозависимого переключения аппаратных скоростных селекторов в MMIO.
 
-3. **[Tianocore EDK II](https://github.com/tianocore/edk2)**  
+4. **[Tianocore EDK II](https://github.com/tianocore/edk2)**  
    Инфраструктура и спецификации Unified Extensible Firmware Interface (UEFI), стандарты взаимодействия с протоколами `EFI_PCI_IO_PROTOCOL` и `EFI_GRAPHICS_OUTPUT_PROTOCOL`.
 
 ---
