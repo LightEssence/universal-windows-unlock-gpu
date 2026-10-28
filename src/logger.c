@@ -24,27 +24,18 @@ EFI_STATUS LoggerInit(EFI_HANDLE image_handle)
     s = fs->OpenVolume(fs, &root);
     if (EFI_ERROR(s) || !root) return s;
 
-    /*
-     * Smart Directory Selection:
-     * 1. If legacy \AD104-UNLOCK exists on the drive, keep using it for continuity.
-     * 2. Otherwise, use universal \UNLOCK-LOGS directory.
-     */
+    /* Strictly universal logging directory: \UNLOCK-LOGS\ */
     EFI_FILE_HANDLE dir = NULL;
-    s = root->Open(root, &dir, L"\\AD104-UNLOCK",
-                   EFI_FILE_MODE_READ | EFI_FILE_MODE_WRITE,
+    s = root->Open(root, &dir, L"\\UNLOCK-LOGS",
+                   EFI_FILE_MODE_READ | EFI_FILE_MODE_WRITE | EFI_FILE_MODE_CREATE,
                    EFI_FILE_DIRECTORY);
-    if (EFI_ERROR(s) || !dir) {
-        s = root->Open(root, &dir, L"\\UNLOCK-LOGS",
-                       EFI_FILE_MODE_READ | EFI_FILE_MODE_WRITE | EFI_FILE_MODE_CREATE,
-                       EFI_FILE_DIRECTORY);
-    }
 
     if (EFI_ERROR(s) || !dir) {
         root->Close(root);
         return s;
     }
 
-    /* Find next free RUNxxxx.TXT */
+    /* Find next free RUNxxxx.TXT inside \UNLOCK-LOGS\ */
     for (UINTN slot = 1; slot <= 9999; slot++) {
         CHAR16 name[] = L"RUN0000.TXT";
         UINTN number = slot;
