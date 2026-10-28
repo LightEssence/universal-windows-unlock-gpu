@@ -23,8 +23,16 @@ BOOLEAN GuAssetsValid(VOID) {
   if (GuAssetCount == 0) return FALSE;
   for(UINTN i=0;i<GuAssetCount;i++) {
     BOOLEAN match = FALSE;
+    const char *a_base = GuAssets[i].name;
+    for (const char *p = GuAssets[i].name; *p; p++) {
+      if (*p == '/' || *p == '\\') a_base = p + 1;
+    }
     for(UINTN p=0;p<sizeof(Pins)/sizeof(Pins[0]);p++) {
-      if(GuAssets[i].name && !strcmp(GuAssets[i].name, Pins[p].name)) {
+      const char *pin_base = Pins[p].name;
+      for (const char *k = Pins[p].name; *k; k++) {
+        if (*k == '/' || *k == '\\') pin_base = k + 1;
+      }
+      if(!strcmp(a_base, pin_base)) {
         if(GuAssets[i].firmware.size==Pins[p].bytes &&
            GuHashMatches(GuAssets[i].firmware.data, Pins[p].bytes, Pins[p].hash)) {
           match = TRUE;

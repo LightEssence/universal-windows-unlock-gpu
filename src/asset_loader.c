@@ -21,19 +21,19 @@ typedef struct {
 
 static const ASSET_DESCRIPTOR g_all_assets[] = {
     /* Shared GSP-RM firmware (Ampere + Ada) */
-    { L"gsp_ga10x.bin", "gpu-unlock/610.43.03/gsp_ga10x.bin", 84277400, TRUE },
+    { L"gsp_ga10x.bin", "gsp_ga10x.bin", 84277400, TRUE },
 
     /* Ada Lovelace (RTX 40 Series) */
-    { L"booter_load_ad102.bin", "gpu-unlock/610.43.03/booter_load_ad102.bin", 57672, FALSE },
-    { L"v67-ad102-610.43.03-four-plm.bin", "gpu-unlock/610.43.03/v67-ad102-610.43.03-four-plm.bin", 64000, FALSE },
-    { L"gsp_boot_ad102.bin", "gpu-unlock/610.43.03/gsp_boot_ad102.bin", 36864, FALSE },
-    { L"gsp_boot_desc_ad102.bin", "gpu-unlock/610.43.03/gsp_boot_desc_ad102.bin", 84, FALSE },
+    { L"booter_load_ad102.bin", "booter_load_ad102.bin", 57672, FALSE },
+    { L"v67-ad102-610.43.03-four-plm.bin", "v67-ad102-610.43.03-four-plm.bin", 64000, FALSE },
+    { L"gsp_boot_ad102.bin", "gsp_boot_ad102.bin", 36864, FALSE },
+    { L"gsp_boot_desc_ad102.bin", "gsp_boot_desc_ad102.bin", 84, FALSE },
 
     /* Ampere (RTX 30 Series, including RTX 3060) */
-    { L"booter_load_ga102.bin", "gpu-unlock/610.43.03/booter_load_ga102.bin", 61256, FALSE },
-    { L"v67-ga102-610.43.03.bin", "gpu-unlock/610.43.03/v67-ga102-610.43.03.bin", 64000, FALSE },
-    { L"gsp_boot_ga102.bin", "gpu-unlock/610.43.03/gsp_boot_ga102.bin", 24576, FALSE },
-    { L"gsp_boot_desc_ga102.bin", "gpu-unlock/610.43.03/gsp_boot_desc_ga102.bin", 84, FALSE }
+    { L"booter_load_ga102.bin", "booter_load_ga102.bin", 61256, FALSE },
+    { L"v67-ga102-610.43.03.bin", "v67-ga102-610.43.03.bin", 64000, FALSE },
+    { L"gsp_boot_ga102.bin", "gsp_boot_ga102.bin", 24576, FALSE },
+    { L"gsp_boot_desc_ga102.bin", "gsp_boot_desc_ga102.bin", 84, FALSE }
 };
 
 #define TOTAL_KNOWN_ASSETS (sizeof(g_all_assets) / sizeof(g_all_assets[0]))

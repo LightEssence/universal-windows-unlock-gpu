@@ -54,9 +54,19 @@ void *kvcalloc(size_t N,size_t S,int Flags) {
 }
 int request_firmware(const struct firmware **Out,const char *Name,struct device *D) {
   UINTN I;(void)D;*Out=NULL;
-  for(I=0;I<GuAssetCount;I++)if(GuAssets[I].name && !strcmp(Name,GuAssets[I].name) &&
-      GuAssets[I].firmware.data && GuAssets[I].firmware.size) {
-    *Out=&GuAssets[I].firmware;return 0;
+  const char *base = Name;
+  for (const char *p = Name; *p; p++) {
+    if (*p == '/' || *p == '\\') base = p + 1;
+  }
+  for(I=0;I<GuAssetCount;I++) {
+    const char *asset_base = GuAssets[I].name;
+    for (const char *p = GuAssets[I].name; *p; p++) {
+      if (*p == '/' || *p == '\\') asset_base = p + 1;
+    }
+    if ((!strcmp(Name,GuAssets[I].name) || !strcmp(base, asset_base)) &&
+        GuAssets[I].firmware.data && GuAssets[I].firmware.size) {
+      *Out=&GuAssets[I].firmware;return 0;
+    }
   }
   return -ENOENT;
 }
