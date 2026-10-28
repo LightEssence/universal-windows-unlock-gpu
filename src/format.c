@@ -54,9 +54,17 @@ size_t FormatV(char *destination, size_t capacity, const char *format, va_list a
         format++;
 
         if (kind == 's') {
-            const char *s = va_arg(args, const char *);
-            if (!s) s = "(null)";
-            while (*s) put(&o, *s++);
+            if (length == 1) { /* %ls: Wide Unicode string (CHAR16 *) */
+                const uint16_t *ws = va_arg(args, const uint16_t *);
+                if (!ws) ws = (const uint16_t *)u"(null)";
+                while (*ws) {
+                    put(&o, (char)(*ws++ & 0x7F));
+                }
+            } else { /* %s: ASCII string (char *) */
+                const char *s = va_arg(args, const char *);
+                if (!s) s = "(null)";
+                while (*s) put(&o, *s++);
+            }
             continue;
         }
 

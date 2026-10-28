@@ -21,3 +21,4 @@ VOID LogWrite(CONST CHAR8 *format, ...);
 VOID LoggerClose(VOID);
 
 #endif /* UNIVERSAL_LOGGER_H */
+

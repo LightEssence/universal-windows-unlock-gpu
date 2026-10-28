@@ -96,3 +96,4 @@ VOID LoggerClose(VOID)
         g_LogFile = NULL;
     }
 }
+

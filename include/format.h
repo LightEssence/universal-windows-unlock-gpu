@@ -8,3 +8,4 @@
 size_t FormatV(char *destination, size_t capacity, const char *format, va_list args);
 
 #endif /* UNIVERSAL_FORMAT_H */
+
