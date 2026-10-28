@@ -42,8 +42,11 @@ EFI_STATUS RestoreGpuPciDecode(DETECTED_GPU *gpu)
 
     LogWrite("[Decode] PCI Command before: %#x\n", cmd);
 
-    /* Bit 1: Memory Space Enable (0x2), Bit 2: Bus Master Enable (0x4) */
-    cmd |= 0x0006;
+    /* Bit 0: IO Space Enable (0x1), Bit 1: Memory Space Enable (0x2).
+     * Bit 2 (Bus Master Enable) MUST BE 0 before Falcon transaction claim.
+     * The transaction enables Bus Master itself when DMA buffers are mapped.
+     */
+    cmd = (cmd & ~0x0004) | 0x0003;
     status = gpu->pci_io->Pci.Write(gpu->pci_io, EfiPciIoWidthUint16, 4, 1, &cmd);
     if (EFI_ERROR(status)) {
         LogWrite("[Decode] Failed to write PCI Command register (%#llx)\n", (unsigned long long)status);
@@ -52,8 +55,10 @@ EFI_STATUS RestoreGpuPciDecode(DETECTED_GPU *gpu)
 
     UINT16 readback = 0;
     gpu->pci_io->Pci.Read(gpu->pci_io, EfiPciIoWidthUint16, 4, 1, &readback);
-    LogWrite("[Decode] PCI Command after: %#x (Memory/Master=%s)\n",
-             readback, (readback & 6) == 6 ? "ENABLED" : "DISABLED");
+    LogWrite("[Decode] PCI Command after: %#x (IO=%s, Memory=%s, Master=%s)\n",
+             readback, (readback & 1) ? "ENABLED" : "DISABLED",
+             (readback & 2) ? "ENABLED" : "DISABLED",
+             (readback & 4) ? "ENABLED" : "DISABLED");
 
     return EFI_SUCCESS;
 }

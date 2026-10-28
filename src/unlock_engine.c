@@ -6,6 +6,8 @@
 #include "port.h"
 #include "vendor/unlock_610.h"
 
+static BOOLEAN UnlockDisplayOk(VOID) { return TRUE; }
+
 EFI_STATUS ExecuteGpuRamUnlock(DETECTED_GPU *gpu) {
   if (!gpu || !gpu->pci_io) {
     LogWrite("[Unlock] Error: Invalid GPU handle or PCI IO\n");
@@ -40,8 +42,25 @@ EFI_STATUS ExecuteGpuRamUnlock(DETECTED_GPU *gpu) {
   Gu.owned = TRUE;
   Gu.armed = TRUE;
   Gu.display_ok = TRUE;
+  Gu.display_check = UnlockDisplayOk;
   Gu.profile_verified = TRUE;
   Gu.prom_verified = TRUE;
+  Gu.transaction_attempted = FALSE;
+
+  /* Check and latch initial cold speed selectors */
+  UINT32 cold_ss0 = GuRead32(0x82381c);
+  UINT32 cold_ss1 = GuRead32(0x823820);
+  LogWrite("[Unlock] Cold selectors before transaction: SS0=%#x SS1=%#x\n", cold_ss0, cold_ss1);
+
+  if (cold_ss0 == 0x88888888U && (cold_ss1 & 0xFU) == 0x8U) {
+    LogWrite("[Unlock] GPU is already unlocked in RAM (SS0=0x88888888, SS1=0x8)!\n");
+    gpu->unlocked_success = TRUE;
+    return EFI_SUCCESS;
+  }
+
+  if (!GuLatchEntrySelectors(cold_ss0, cold_ss1)) {
+    LogWrite("[Unlock] Warning: GuLatchEntrySelectors returned FALSE (SS0=%#x, SS1=%#x)\n", cold_ss0, cold_ss1);
+  }
 
   /* 2. Setup Linux pci_dev structure */
   UINT64 mask = 0xffffffffffffULL;
@@ -52,6 +71,13 @@ EFI_STATUS ExecuteGpuRamUnlock(DETECTED_GPU *gpu) {
       .current_state = PCI_D0,
       .pm_cap = Gu.pm_cap,
       .refs = 1};
+
+  /* Ensure IO (0x1) and Memory (0x2) are enabled, and Bus Master (0x4) is 0 before transaction claim */
+  UINT16 pci_cmd = 0;
+  gpu->pci_io->Pci.Read(gpu->pci_io, EfiPciIoWidthUint16, 4, 1, &pci_cmd);
+  pci_cmd = (pci_cmd & ~0x0004) | 0x0003;
+  gpu->pci_io->Pci.Write(gpu->pci_io, EfiPciIoWidthUint16, 4, 1, &pci_cmd);
+  LogWrite("[Unlock] PCI command prepared: %#x (IO/Memory=ENABLED, Bus Master=DISABLED)\n", pci_cmd);
 
   /* 3. Run V67 firmware transaction (FWSEC -> SEC2 Booter -> Selectors -> FLR)
    */

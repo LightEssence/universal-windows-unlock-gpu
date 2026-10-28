@@ -41,15 +41,20 @@ def package_drive(target_path: Path):
         shutil.copy2(my_rom, target_rom)
         print(f"  [+] Pre-loaded RTX 4070 Ti ROM -> {target_rom}")
 
-    # 4b. Copy firmware assets (AD104-ASSETS)
-    assets_src = GPU_ROOT / "AD104-ASSETS"
+    # 4b. Copy universal firmware assets to EFI\ASSETS
+    assets_src = PROJECT_ROOT / "UNIVERSAL-ASSETS"
+    if not assets_src.exists():
+        assets_src = PROJECT_ROOT / "EFI" / "ASSETS"
+    if not assets_src.exists():
+        assets_src = GPU_ROOT / "UNIVERSAL-ASSETS"
+    
     if assets_src.exists():
-        assets_dst = target_path / "AD104-ASSETS"
+        assets_dst = target_path / "EFI" / "ASSETS"
         assets_dst.mkdir(parents=True, exist_ok=True)
         for item in assets_src.iterdir():
             if item.is_file():
                 shutil.copy2(item, assets_dst / item.name)
-        print(f"  [+] Installed firmware payloads -> {assets_dst}")
+        print(f"  [+] Installed universal firmware assets -> {assets_dst}")
 
     # 5. Instructions
     readme = target_path / "ИНСТРУКЦИЯ.txt"

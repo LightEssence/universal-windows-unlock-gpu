@@ -57,15 +57,24 @@ static EFI_STATUS ReadAssetFile(EFI_FILE_HANDLE root, const CHAR16 *dir_name, co
     s = f->GetInfo(f, &InfoGuid, &info_bytes, info_words);
     EFI_FILE_INFO *info = (EFI_FILE_INFO *)info_words;
     if (EFI_ERROR(s) || info->FileSize != expected || (info->Attribute & EFI_FILE_DIRECTORY)) {
+        LogWrite("[Assets] Size mismatch '%ls': got %llu, expected %llu\n",
+                 path, (unsigned long long)info->FileSize, (unsigned long long)expected);
         f->Close(f);
         return EFI_COMPROMISED_DATA;
     }
 
-    VOID *p = GuAlloc(expected);
-    if (!p) {
+    VOID *p = NULL;
+    UINTN pages = (expected + 4095) / 4096;
+    EFI_PHYSICAL_ADDRESS addr = 0;
+    s = gBS->AllocatePages(AllocateAnyPages, EfiLoaderData, pages, &addr);
+    if (EFI_ERROR(s) || !addr) {
+        LogWrite("[Assets] AllocatePages failed for '%ls' (%u bytes, status=%#llx)\n",
+                 path, (unsigned)expected, (unsigned long long)s);
         f->Close(f);
         return EFI_OUT_OF_RESOURCES;
     }
+    p = (VOID *)(UINTN)addr;
+    memset(p, 0, expected);
 
     for (UINTN at = 0; at < expected;) {
         UINTN n = expected - at;
@@ -73,8 +82,10 @@ static EFI_STATUS ReadAssetFile(EFI_FILE_HANDLE root, const CHAR16 *dir_name, co
         UINTN wanted = n;
         s = f->Read(f, &n, (UINT8 *)p + at);
         if (EFI_ERROR(s) || n != wanted) {
+            LogWrite("[Assets] Read error on '%ls' at %u (read %u of %u, status=%#llx)\n",
+                     path, (unsigned)at, (unsigned)n, (unsigned)wanted, (unsigned long long)s);
             f->Close(f);
-            GuFree(p);
+            gBS->FreePages(addr, pages);
             return EFI_DEVICE_ERROR;
         }
         at += n;
@@ -82,6 +93,7 @@ static EFI_STATUS ReadAssetFile(EFI_FILE_HANDLE root, const CHAR16 *dir_name, co
 
     f->Close(f);
     *data = p;
+    LogWrite("[Assets] Loaded '%ls' (%u bytes)\n", path, (unsigned)expected);
     return EFI_SUCCESS;
 }
 
@@ -89,9 +101,13 @@ EFI_STATUS LoadFirmwareAssets(EFI_HANDLE image_handle)
 {
     static const CHAR16 *search_dirs[] = {
         L"\\EFI\\ASSETS\\",
+        L"EFI\\ASSETS\\",
+        L"\\UNIVERSAL-ASSETS\\",
+        L"UNIVERSAL-ASSETS\\",
         L"\\ASSETS\\",
-        L"\\AD104-ASSETS\\"
+        L"ASSETS\\"
     };
+    const UINTN num_dirs = sizeof(search_dirs) / sizeof(search_dirs[0]);
 
     EFI_LOADED_IMAGE_PROTOCOL *loaded = NULL;
     EFI_STATUS s = gBS->HandleProtocol(image_handle, &LoadedGuid, (VOID **)&loaded);
@@ -111,7 +127,7 @@ EFI_STATUS LoadFirmwareAssets(EFI_HANDLE image_handle)
     BOOLEAN gsp_loaded = FALSE;
 
     /* Scan each search directory for matching firmware files */
-    for (UINTN d = 0; d < 3; d++) {
+    for (UINTN d = 0; d < num_dirs; d++) {
         const CHAR16 *dir = search_dirs[d];
 
         for (UINTN i = 0; i < TOTAL_KNOWN_ASSETS; i++) {
