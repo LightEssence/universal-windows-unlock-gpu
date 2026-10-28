@@ -6,7 +6,7 @@ static EFI_GUID LoadedImageProtocolGuid = EFI_LOADED_IMAGE_PROTOCOL_GUID;
 static EFI_GUID SimpleFileSystemProtocolGuid = EFI_SIMPLE_FILE_SYSTEM_PROTOCOL_GUID;
 
 static EFI_FILE_HANDLE g_LogFile = NULL;
-static CHAR16 g_LogPath[32] = { 0 };
+static CHAR16 g_LogPath[64] = { 0 };
 
 EFI_STATUS LoggerInit(EFI_HANDLE image_handle)
 {
@@ -24,11 +24,21 @@ EFI_STATUS LoggerInit(EFI_HANDLE image_handle)
     s = fs->OpenVolume(fs, &root);
     if (EFI_ERROR(s) || !root) return s;
 
-    /* Open or create \AD104-UNLOCK directory */
+    /*
+     * Smart Directory Selection:
+     * 1. If legacy \AD104-UNLOCK exists on the drive, keep using it for continuity.
+     * 2. Otherwise, use universal \UNLOCK-LOGS directory.
+     */
     EFI_FILE_HANDLE dir = NULL;
     s = root->Open(root, &dir, L"\\AD104-UNLOCK",
-                   EFI_FILE_MODE_READ | EFI_FILE_MODE_WRITE | EFI_FILE_MODE_CREATE,
+                   EFI_FILE_MODE_READ | EFI_FILE_MODE_WRITE,
                    EFI_FILE_DIRECTORY);
+    if (EFI_ERROR(s) || !dir) {
+        s = root->Open(root, &dir, L"\\UNLOCK-LOGS",
+                       EFI_FILE_MODE_READ | EFI_FILE_MODE_WRITE | EFI_FILE_MODE_CREATE,
+                       EFI_FILE_DIRECTORY);
+    }
+
     if (EFI_ERROR(s) || !dir) {
         root->Close(root);
         return s;
@@ -96,4 +106,3 @@ VOID LoggerClose(VOID)
         g_LogFile = NULL;
     }
 }
-
