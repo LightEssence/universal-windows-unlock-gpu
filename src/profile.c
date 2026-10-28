@@ -8,19 +8,36 @@
 static const struct {
   const char *name,*hash;
   UINTN bytes;
-} Pins[5]={
- {"gpu-unlock/610.43.03/booter_load_ad102.bin","6ee05b20e1dc244c08c052f36ef28469b8d09f4955d1fe33e48a179e11a7fd49",57672},
- {"gpu-unlock/610.43.03/v67-ad102-610.43.03-four-plm.bin","44c36b2d6b3424e53e18f3e55db85c833655de071ce66ce42749588a4a7dc8cb",64000},
- {"gpu-unlock/610.43.03/gsp_ga10x.bin","572373620a37418f24dc16b5031c39338778c3257e48e8408de9a57291b24f3a",84277400},
- {"gpu-unlock/610.43.03/gsp_boot_ad102.bin","45d6335a8185d6ff13e8d1484cea73f68d3d13aa1c19dc080ed1c3482dd5bac0",36864},
- {"gpu-unlock/610.43.03/gsp_boot_desc_ad102.bin","83f8f3f1f5f9496e0ea8fc7103c2beb64d0b6de2f5ffe725f13514de5a95fa42",84}
+} Pins[9]={
+  {"gpu-unlock/610.43.03/gsp_ga10x.bin","572373620a37418f24dc16b5031c39338778c3257e48e8408de9a57291b24f3a",84277400},
+  {"gpu-unlock/610.43.03/booter_load_ad102.bin","6ee05b20e1dc244c08c052f36ef28469b8d09f4955d1fe33e48a179e11a7fd49",57672},
+  {"gpu-unlock/610.43.03/v67-ad102-610.43.03-four-plm.bin","44c36b2d6b3424e53e18f3e55db85c833655de071ce66ce42749588a4a7dc8cb",64000},
+  {"gpu-unlock/610.43.03/gsp_boot_ad102.bin","45d6335a8185d6ff13e8d1484cea73f68d3d13aa1c19dc080ed1c3482dd5bac0",36864},
+  {"gpu-unlock/610.43.03/gsp_boot_desc_ad102.bin","83f8f3f1f5f9496e0ea8fc7103c2beb64d0b6de2f5ffe725f13514de5a95fa42",84},
+  {"gpu-unlock/610.43.03/booter_load_ga102.bin","056cbc064a888f80717726c54d7f64fcd68044d123870c95a74f37f4975dcaa4",61256},
+  {"gpu-unlock/610.43.03/v67-ga102-610.43.03.bin","2a0aa1f86d0b6afff5214d641d87d46dc98ef06ed908ff05d0ddbad5ffb7e197",64000},
+  {"gpu-unlock/610.43.03/gsp_boot_ga102.bin","3df651acb174fd5f5561a1996965b192f50c5d763168446ed0d4ead19d895768",24576},
+  {"gpu-unlock/610.43.03/gsp_boot_desc_ga102.bin","cc5a3fc1f4c47f2fe107b1b68f0176d8a448e6dec84b575e5560ccef5262bf15",84}
 };
-BOOLEAN GuAd104AssetsValid(VOID) {
-  for(UINTN i=0;i<5;i++)
-    if(!GuAssets[i].name || strcmp(GuAssets[i].name,Pins[i].name) ||
-       GuAssets[i].firmware.size!=Pins[i].bytes ||
-       !GuHashMatches(GuAssets[i].firmware.data,Pins[i].bytes,Pins[i].hash))return FALSE;
+BOOLEAN GuAssetsValid(VOID) {
+  if (GuAssetCount == 0) return FALSE;
+  for(UINTN i=0;i<GuAssetCount;i++) {
+    BOOLEAN match = FALSE;
+    for(UINTN p=0;p<sizeof(Pins)/sizeof(Pins[0]);p++) {
+      if(GuAssets[i].name && !strcmp(GuAssets[i].name, Pins[p].name)) {
+        if(GuAssets[i].firmware.size==Pins[p].bytes &&
+           GuHashMatches(GuAssets[i].firmware.data, Pins[p].bytes, Pins[p].hash)) {
+          match = TRUE;
+        }
+        break;
+      }
+    }
+    if(!match) return FALSE;
+  }
   return TRUE;
+}
+BOOLEAN GuAd104AssetsValid(VOID) {
+  return GuAssetsValid();
 }
 BOOLEAN GuAd104PromMatches(const VOID *Data,UINTN Bytes) {
   if (!Data || Bytes < 626176) return FALSE;

@@ -12,6 +12,32 @@ static EFI_GUID LoadedGuid = EFI_LOADED_IMAGE_PROTOCOL_GUID;
 static EFI_GUID FsGuid = EFI_SIMPLE_FILE_SYSTEM_PROTOCOL_GUID;
 static EFI_GUID InfoGuid = EFI_FILE_INFO_ID;
 
+typedef struct {
+    const CHAR16 *file_name;
+    const char   *registry_name;
+    UINTN         size;
+    BOOLEAN       required;
+} ASSET_DESCRIPTOR;
+
+static const ASSET_DESCRIPTOR g_all_assets[] = {
+    /* Shared GSP-RM firmware (Ampere + Ada) */
+    { L"gsp_ga10x.bin", "gpu-unlock/610.43.03/gsp_ga10x.bin", 84277400, TRUE },
+
+    /* Ada Lovelace (RTX 40 Series) */
+    { L"booter_load_ad102.bin", "gpu-unlock/610.43.03/booter_load_ad102.bin", 57672, FALSE },
+    { L"v67-ad102-610.43.03-four-plm.bin", "gpu-unlock/610.43.03/v67-ad102-610.43.03-four-plm.bin", 64000, FALSE },
+    { L"gsp_boot_ad102.bin", "gpu-unlock/610.43.03/gsp_boot_ad102.bin", 36864, FALSE },
+    { L"gsp_boot_desc_ad102.bin", "gpu-unlock/610.43.03/gsp_boot_desc_ad102.bin", 84, FALSE },
+
+    /* Ampere (RTX 30 Series, including RTX 3060) */
+    { L"booter_load_ga102.bin", "gpu-unlock/610.43.03/booter_load_ga102.bin", 61256, FALSE },
+    { L"v67-ga102-610.43.03.bin", "gpu-unlock/610.43.03/v67-ga102-610.43.03.bin", 64000, FALSE },
+    { L"gsp_boot_ga102.bin", "gpu-unlock/610.43.03/gsp_boot_ga102.bin", 24576, FALSE },
+    { L"gsp_boot_desc_ga102.bin", "gpu-unlock/610.43.03/gsp_boot_desc_ga102.bin", 84, FALSE }
+};
+
+#define TOTAL_KNOWN_ASSETS (sizeof(g_all_assets) / sizeof(g_all_assets[0]))
+
 static EFI_STATUS ReadAssetFile(EFI_FILE_HANDLE root, const CHAR16 *dir_name, const CHAR16 *file_name, UINTN expected, VOID **data)
 {
     *data = NULL;
@@ -61,25 +87,11 @@ static EFI_STATUS ReadAssetFile(EFI_FILE_HANDLE root, const CHAR16 *dir_name, co
 
 EFI_STATUS LoadFirmwareAssets(EFI_HANDLE image_handle)
 {
-    static const CHAR16 *dirs[] = {
-        L"\\AD104-ASSETS\\",
-        L"\\EFI\\ASSETS\\"
+    static const CHAR16 *search_dirs[] = {
+        L"\\EFI\\ASSETS\\",
+        L"\\ASSETS\\",
+        L"\\AD104-ASSETS\\"
     };
-    static const CHAR16 *files[] = {
-        L"booter_load_ad102.bin",
-        L"v67-ad102-610.43.03-four-plm.bin",
-        L"gsp_ga10x.bin",
-        L"gsp_boot_ad102.bin",
-        L"gsp_boot_desc_ad102.bin"
-    };
-    static const char *full_names[] = {
-        "gpu-unlock/610.43.03/booter_load_ad102.bin",
-        "gpu-unlock/610.43.03/v67-ad102-610.43.03-four-plm.bin",
-        "gpu-unlock/610.43.03/gsp_ga10x.bin",
-        "gpu-unlock/610.43.03/gsp_boot_ad102.bin",
-        "gpu-unlock/610.43.03/gsp_boot_desc_ad102.bin"
-    };
-    static const UINTN sizes[] = { 57672, 64000, 84277400, 36864, 84 };
 
     EFI_LOADED_IMAGE_PROTOCOL *loaded = NULL;
     EFI_STATUS s = gBS->HandleProtocol(image_handle, &LoadedGuid, (VOID **)&loaded);
@@ -93,40 +105,58 @@ EFI_STATUS LoadFirmwareAssets(EFI_HANDLE image_handle)
     s = fs->OpenVolume(fs, &root);
     if (EFI_ERROR(s) || !root) return s;
 
-    /* Try each asset directory until all files are successfully loaded */
-    BOOLEAN loaded_all = FALSE;
-    for (UINTN d = 0; d < 2 && !loaded_all; d++) {
-        BOOLEAN dir_ok = TRUE;
-        for (UINTN i = 0; i < 5; i++) {
-            VOID *data = NULL;
-            s = ReadAssetFile(root, dirs[d], files[i], sizes[i], &data);
-            if (EFI_ERROR(s)) {
-                dir_ok = FALSE;
-                break;
+    GuAssetCount = 0;
+    BOOLEAN ada_loaded = FALSE;
+    BOOLEAN ampere_loaded = FALSE;
+    BOOLEAN gsp_loaded = FALSE;
+
+    /* Scan each search directory for matching firmware files */
+    for (UINTN d = 0; d < 3; d++) {
+        const CHAR16 *dir = search_dirs[d];
+
+        for (UINTN i = 0; i < TOTAL_KNOWN_ASSETS; i++) {
+            /* Skip if already loaded in an earlier directory */
+            BOOLEAN already = FALSE;
+            for (UINTN a = 0; a < GuAssetCount; a++) {
+                if (!strcmp(GuAssets[a].name, g_all_assets[i].registry_name)) {
+                    already = TRUE;
+                    break;
+                }
             }
-            GuAssets[i].name = full_names[i];
-            GuAssets[i].firmware.size = sizes[i];
-            GuAssets[i].firmware.data = data;
-        }
-        if (dir_ok) {
-            loaded_all = TRUE;
-            LogWrite("[Assets] Successfully loaded all 5 V67 assets from %ls\n", dirs[d]);
+            if (already) continue;
+
+            VOID *data = NULL;
+            s = ReadAssetFile(root, dir, g_all_assets[i].file_name, g_all_assets[i].size, &data);
+            if (!EFI_ERROR(s) && data && GuAssetCount < GU_MAX_ASSETS) {
+                GuAssets[GuAssetCount].name = g_all_assets[i].registry_name;
+                GuAssets[GuAssetCount].firmware.size = g_all_assets[i].size;
+                GuAssets[GuAssetCount].firmware.data = data;
+                GuAssetCount++;
+
+                if (i == 0) gsp_loaded = TRUE;
+                else if (i >= 1 && i <= 4) ada_loaded = TRUE;
+                else if (i >= 5 && i <= 8) ampere_loaded = TRUE;
+            }
         }
     }
 
     root->Close(root);
 
-    if (!loaded_all) {
-        LogWrite("[Assets] Error: Could not locate V67 firmware assets on boot media!\n");
+    LogWrite("[Assets] Staged %u assets into RAM (GSP=%u, Ada=%u, Ampere=%u)\n",
+             (unsigned)GuAssetCount, gsp_loaded, ada_loaded, ampere_loaded);
+
+    if (!gsp_loaded || GuAssetCount < 5) {
+        LogWrite("[Assets] Error: Incomplete firmware assets on boot media!\n");
         return EFI_NOT_FOUND;
     }
 
     /* Verify cryptographic SHA-256 signatures of all loaded payloads */
-    if (!GuAd104AssetsValid()) {
-        LogWrite("[Assets] Error: Asset SHA-256 hash validation failed!\n");
+    if (!GuAssetsValid()) {
+        LogWrite("[Assets] Error: Asset SHA-256 cryptographic verification failed!\n");
         return EFI_CRC_ERROR;
     }
 
-    LogWrite("[Assets] Verified 5 V67 assets SHA-256 pinned in RAM (84.4 MB total)\n");
+    LogWrite("[Assets] Cryptographic SHA-256 verified for all %u assets (Ada + Ampere ready)\n",
+             (unsigned)GuAssetCount);
     return EFI_SUCCESS;
 }

@@ -64,8 +64,10 @@ struct device {u64 *dma_mask;u64 coherent_dma_mask;struct list_head devres_head;
 #define PCI_UNKNOWN -1
 struct pci_dev {u16 vendor,device;struct device dev;int current_state,pm_cap,refs;unsigned int dev_flags;};
 struct firmware {size_t size;const u8 *data;};
+#define GU_MAX_ASSETS 16
 typedef struct {const char *name;struct firmware firmware;} GU_ASSET;
-extern GU_ASSET GuAssets[5];
+extern GU_ASSET GuAssets[GU_MAX_ASSETS];
+extern UINTN GuAssetCount;
 void *memcpy(void *,const void *,size_t);
 void *memset(void *,int,size_t);
 int memcmp(const void *,const void *,size_t);
