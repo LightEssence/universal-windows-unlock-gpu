@@ -15,7 +15,7 @@
 > This bootloader has been physically tested, validated, and verified **exclusively** on the following hardware platform:
 > * **Motherboard:** Huananzhi Dual-Socket X99 (LGA2011-v3 dual-socket workstation)
 > * **Processors:** 2 × Intel Xeon E5-2696 v3 (Haswell-EP, 36 cores / 72 threads total)
-> * **Graphics Card:** Gigabyte GeForce RTX 4070 Ti Gaming OC (AD104, PCI Device `0x2782`, Subsystem `0x1458:0x40e8`)
+> * **Graphics Card:** Gigabyte GeForce RTX 4070 Ti WINDFORCE OC (AD104, PCI Device `0x2782`, Subsystem `0x1458:0x40e8`)
 >
 > This project is distributed **"AS IS"** strictly for research and educational purposes. The authors assume no liability for incompatibility, unexpected behavior, or hardware instability on other motherboards, BIOS revisions, or silicon steppings. Use on any other hardware configuration is entirely at your own risk.
 
@@ -181,3 +181,4 @@ This project builds upon the foundational reverse-engineering and open-source co
 
 * The EFI bootloader and supporting scripts are licensed under **GPL-2.0-only** in accordance with derivative work requirements from Linux kernel and NVIDIA open drivers.
 * Microcode firmware binaries (`*.bin`) remain the intellectual property of NVIDIA Corporation and are governed by `NVIDIA-LICENSE`.
+
