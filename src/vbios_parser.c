@@ -191,3 +191,4 @@ int ParseVbiosFwsec(const u8 *rom_data, size_t rom_size, DYNAMIC_FWSEC *out_fwse
 
     return -3; /* FWSEC descriptor not found */
 }
+

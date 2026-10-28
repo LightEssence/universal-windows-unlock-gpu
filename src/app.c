@@ -6,6 +6,7 @@
 #include "vbios_parser.h"
 #include "display_release.h"
 #include "unlock_engine.h"
+#include "logger.h"
 
 EFI_SYSTEM_TABLE        *gST = NULL;
 EFI_BOOT_SERVICES       *gBS = NULL;
@@ -97,6 +98,8 @@ static EFI_HANDLE FindWindowsBootVolume(VOID)
 
 static EFI_STATUS BootWindows(VOID)
 {
+    LoggerClose();
+
     EFI_HANDLE win_vol = FindWindowsBootVolume();
     if (!win_vol) {
         PrintColor(EFI_LIGHTRED | EFI_BLACK, L"\r\n[!] Error: Windows Boot Manager (bootmgfw.efi) not found on any volume!\r\n");
@@ -108,7 +111,7 @@ static EFI_STATUS BootWindows(VOID)
 
     /* Construct device path for bootmgfw.efi */
     CONST CHAR16 *win_path = L"\\EFI\\Microsoft\\Boot\\bootmgfw.efi";
-    UINTN name_bytes = 34 * sizeof(CHAR16); /* 34 chars including NUL */
+    UINTN name_bytes = 34 * sizeof(CHAR16);
     UINTN total_bytes = sizeof(EFI_DEVICE_PATH_PROTOCOL) + name_bytes;
 
     UINT8 dp_node[sizeof(EFI_DEVICE_PATH_PROTOCOL) + 128];
@@ -124,7 +127,6 @@ static EFI_STATUS BootWindows(VOID)
     EFI_HANDLE win_image = NULL;
     EFI_STATUS s = gBS->LoadImage(FALSE, gImageHandle, file_dp, NULL, 0, &win_image);
     if (EFI_ERROR(s)) {
-        /* Fallback: attempt load using volume handle */
         EFI_LOADED_IMAGE_PROTOCOL *loaded = NULL;
         s = gBS->HandleProtocol(gImageHandle, &LoadedImageProtocolGuid, (VOID **)&loaded);
         if (!EFI_ERROR(s)) {
@@ -147,9 +149,14 @@ EFI_STATUS EFIAPI UefiMain(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable
     gRT = SystemTable->RuntimeServices;
     gImageHandle = ImageHandle;
 
+    /* Initialize persistent file logger on USB: \AD104-UNLOCK\RUNxxxx.TXT */
+    LoggerInit(ImageHandle);
+
     if (gST->ConOut) {
         gST->ConOut->ClearScreen(gST->ConOut);
     }
+
+    LogWrite("UNIVERSAL MULTI-GPU WINDOWS UNLOCK ENGINE v2.0 (Zero-Flash, In-RAM)\n");
 
     PrintColor(EFI_LIGHTCYAN | EFI_BLACK, L"======================================================================\r\n");
     PrintColor(EFI_WHITE | EFI_BLACK,     L"     UNIVERSAL MULTI-GPU WINDOWS UNLOCK ENGINE (AMP/ADA)\r\n");
@@ -158,8 +165,11 @@ EFI_STATUS EFIAPI UefiMain(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable
 
     /* 1. PCIe Topology Multi-GPU Scan */
     g_gpu_count = ScanSystemGpus(g_gpus, MAX_SYSTEM_GPUS);
+    LogWrite("ScanSystemGpus found %u supported GPU(s)\n", (unsigned)g_gpu_count);
+
     if (g_gpu_count == 0) {
         PrintColor(EFI_LIGHTRED | EFI_BLACK, L"[!] No supported NVIDIA RTX 30 or 40-Series GPUs detected.\r\n");
+        LogWrite("[!] No supported NVIDIA GPUs detected.\n");
         Print(L"    Booting stock Windows in 3 seconds...\r\n");
         gBS->Stall(3000000);
         return BootWindows();
@@ -174,11 +184,17 @@ EFI_STATUS EFIAPI UefiMain(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable
     for (UINTN i = 0; i < g_gpu_count; i++) {
         DETECTED_GPU *gpu = &g_gpus[i];
 
+        LogWrite("[GPU %u] %ls (%ls) Bus=%u:%u.%u Vendor=%#x Dev=%#x SubVen=%#x SubDev=%#x BAR0=%#llx Display=%u\n",
+                 (unsigned)i, gpu->model_name, gpu->chip_name,
+                 (unsigned)gpu->bus, (unsigned)gpu->device, (unsigned)gpu->function,
+                 gpu->vendor_id, gpu->device_id, gpu->subsys_vendor_id, gpu->subsys_device_id,
+                 (unsigned long long)gpu->bar0_base, gpu->is_display_adapter);
+
         Print(L"[GPU "); PrintDec(i); Print(L"] ");
         PrintColor(EFI_WHITE | EFI_BLACK, gpu->model_name);
         Print(L" ("); Print(gpu->chip_name); Print(L") on Bus ");
         PrintDec(gpu->bus); Print(L":"); PrintDec(gpu->device); Print(L"."); PrintDec(gpu->function);
-        Print(L"\r\n        ID: "); Print(gpu->rom_filename + 10); /* Skip \EFI\VBIOS\ */
+        Print(L"\r\n        ID: "); Print(gpu->rom_filename + 10);
         Print(L" | BAR0: "); PrintHex32((UINT32)gpu->bar0_base);
 
         if (gpu->is_display_adapter) {
@@ -217,26 +233,28 @@ EFI_STATUS EFIAPI UefiMain(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable
     UINTN seconds = 10;
 
     while (seconds > 0) {
-        /* Check key */
         EFI_STATUS ks = gST->ConIn->ReadKeyStroke(gST->ConIn, &key);
         if (!EFI_ERROR(ks)) {
             if (key.UnicodeChar == L's' || key.UnicodeChar == L'S') {
                 unlock = FALSE;
                 PrintColor(EFI_LIGHTCYAN | EFI_BLACK, L"S (Stock Windows selected)\r\n");
+                LogWrite("Operator choice: S (Stock)\n");
                 break;
             }
             if (key.UnicodeChar == L'u' || key.UnicodeChar == L'U' || key.UnicodeChar == 13) {
                 unlock = TRUE;
                 PrintColor(EFI_LIGHTGREEN | EFI_BLACK, L"U (Unlock selected)\r\n");
+                LogWrite("Operator choice: U (Unlock)\n");
                 break;
             }
         }
-        gBS->Stall(1000000); /* 1s */
+        gBS->Stall(1000000);
         seconds--;
     }
 
     if (unlock && ready_to_unlock > 0) {
         PrintColor(EFI_LIGHTCYAN | EFI_BLACK, L"\r\nApplying In-RAM Unlocks (Zero-Flash)...\r\n");
+        LogWrite("Executing In-RAM unlock sequence for %u ready GPU(s)\n", (unsigned)ready_to_unlock);
 
         for (UINTN i = 0; i < g_gpu_count; i++) {
             DETECTED_GPU *gpu = &g_gpus[i];
@@ -244,20 +262,23 @@ EFI_STATUS EFIAPI UefiMain(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable
 
             Print(L"  [+] Unlocking GPU "); PrintDec(i); Print(L" ("); Print(gpu->model_name); Print(L")... ");
 
-            /* If card is active display adapter, release GOP console safely */
             if (gpu->is_display_adapter) {
+                LogWrite("Releasing display on GPU %u...\n", (unsigned)i);
                 ReleaseGpuDisplay(gpu);
             }
 
             EFI_STATUS u_stat = ExecuteGpuRamUnlock(gpu);
             if (!EFI_ERROR(u_stat) && gpu->unlocked_success) {
                 PrintColor(EFI_LIGHTGREEN | EFI_BLACK, L"[SUCCESS: SS0/SS1 LATCHED]\r\n");
+                LogWrite("GPU %u unlocked successfully! SS0=0x88888888 SS1=0x8\n", (unsigned)i);
             } else {
                 PrintColor(EFI_LIGHTRED | EFI_BLACK, L"[FAILED]\r\n");
+                LogWrite("GPU %u unlock failed: status=%#llx\n", (unsigned)i, (unsigned long long)u_stat);
             }
         }
     } else {
         Print(L"\r\nSkipping unlock; booting stock configuration.\r\n");
+        LogWrite("Unlock skipped; booting stock.\n");
     }
 
     PrintColor(EFI_WHITE | EFI_BLACK, L"\r\nLaunching Windows Boot Manager...\r\n");

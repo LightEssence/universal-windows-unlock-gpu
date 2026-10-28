@@ -35,3 +35,4 @@ VOID LogPrint(CONST CHAR16 *fmt, ...);
 VOID LogStatus(CONST CHAR16 *prefix, EFI_STATUS status);
 
 #endif /* UNIVERSAL_UEFI_BASE_H */
+

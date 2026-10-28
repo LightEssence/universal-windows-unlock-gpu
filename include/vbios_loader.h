@@ -28,3 +28,4 @@ EFI_STATUS LoadGpuVbiosStrictId(DETECTED_GPU *target_gpu, CONST DETECTED_GPU all
 VOID FreeGpuVbios(DETECTED_GPU *gpu);
 
 #endif /* UNIVERSAL_VBIOS_LOADER_H */
+

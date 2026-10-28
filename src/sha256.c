@@ -128,3 +128,4 @@ BOOLEAN VerifySha256(const VOID *Data, UINTN Size, const char *Hex64)
     }
     return Difference == 0 ? TRUE : FALSE;
 }
+

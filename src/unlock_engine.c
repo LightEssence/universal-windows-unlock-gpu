@@ -117,3 +117,4 @@ EFI_STATUS ExecuteGpuRamUnlock(DETECTED_GPU *gpu)
 
     return EFI_DEVICE_ERROR;
 }
+

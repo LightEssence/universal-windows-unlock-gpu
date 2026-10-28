@@ -31,6 +31,8 @@ flags = [
 ]
 
 sources = [
+    "format",
+    "logger",
     "sha256",
     "pci_scan",
     "vbios_loader",

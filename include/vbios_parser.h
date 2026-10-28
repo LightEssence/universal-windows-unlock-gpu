@@ -35,3 +35,4 @@ typedef struct {
 int ParseVbiosFwsec(const u8 *rom_data, size_t rom_size, DYNAMIC_FWSEC *out_fwsec);
 
 #endif /* UNIVERSAL_VBIOS_PARSER_H */
+

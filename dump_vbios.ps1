@@ -88,3 +88,4 @@ Write-Host "`n==================================================================
 Write-Host "All VBIOS dumps are located in: $VbiosDir" -ForegroundColor Green
 Write-Host "Copy this 'EFI' folder directly to your FAT32 USB drive to use with BOOTX64.EFI!"
 Write-Host "======================================================================" -ForegroundColor Cyan
+

@@ -20,3 +20,4 @@
 EFI_STATUS ExecuteGpuRamUnlock(DETECTED_GPU *gpu);
 
 #endif /* UNIVERSAL_UNLOCK_ENGINE_H */
+

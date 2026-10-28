@@ -57,3 +57,4 @@ typedef struct {
 GPU_ARCH ClassifyGpuArchitecture(UINT16 device_id, CONST CHAR16 **chip_name, CONST CHAR16 **model_name);
 
 #endif /* UNIVERSAL_GPU_TYPES_H */
+

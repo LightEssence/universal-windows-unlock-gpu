@@ -222,3 +222,4 @@ UINTN ScanSystemGpus(DETECTED_GPU out_gpus[], UINTN max_gpus)
     }
     return detected;
 }
+

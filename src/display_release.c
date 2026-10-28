@@ -38,3 +38,4 @@ EFI_STATUS RestoreGpuPciDecode(DETECTED_GPU *gpu)
     cmd |= 0x0006;
     return gpu->pci_io->Pci.Write(gpu->pci_io, EfiPciIoWidthUint16, 0, 2, &cmd);
 }
+

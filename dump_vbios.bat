@@ -12,3 +12,4 @@ powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0dump_vbios.ps1"
 echo.
 echo Press any key to exit...
 pause >nul
+

@@ -70,3 +70,4 @@ if __name__ == "__main__":
         # Default package target: staging folder in project
         target = PROJECT_ROOT / "usb_release_staging"
     package_drive(target)
+

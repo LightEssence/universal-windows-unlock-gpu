@@ -124,3 +124,4 @@ python build.py
 ```powershell
 python tools/package_usb.py "E:\"  # Где E: - буква вашей флешки
 ```
+

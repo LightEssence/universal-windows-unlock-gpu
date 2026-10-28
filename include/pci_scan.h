@@ -22,3 +22,4 @@ UINTN ScanSystemGpus(DETECTED_GPU out_gpus[], UINTN max_gpus);
 VOID FormatGpuRomFileName(CONST DETECTED_GPU *gpu, CHAR16 *out_path, UINTN max_chars);
 
 #endif /* UNIVERSAL_PCI_SCAN_H */
+

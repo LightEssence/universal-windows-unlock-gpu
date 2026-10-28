@@ -22,3 +22,4 @@ EFI_STATUS ReleaseGpuDisplay(DETECTED_GPU *gpu);
 EFI_STATUS RestoreGpuPciDecode(DETECTED_GPU *gpu);
 
 #endif /* UNIVERSAL_DISPLAY_RELEASE_H */
+
