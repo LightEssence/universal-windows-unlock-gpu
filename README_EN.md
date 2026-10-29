@@ -33,7 +33,7 @@ Testing was conducted on physical hardware under Windows 11 x64 with official NV
 ## Hardware Configuration & Parameters
 
 - **Physically Validated Testbed**:
-  - **Motherboard**: Huananzhi X99-F8D Plus (Dual LGA2011-3, Intel C612 / X99 chipset, AMI Aptio IV/V UEFI).
+  - **Motherboard**: Huananzhi X99-F8D Plus (Dual LGA2011-3, Intel C612 / X99 chipset, AMI Aptio V UEFI).
   - **Processors**: 2 × Intel Xeon E5-2696 v3 (Haswell-EP, 36 cores / 72 threads).
   - **Graphics Card**: Gigabyte GeForce RTX 4070 Ti WINDFORCE OC (AD104-400, PCI ID `10de:2782`, Subsystem `1458:40e8`, revision A1).
 - **Strict VBIOS Hardware ID Addressing**:

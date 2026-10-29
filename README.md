@@ -33,7 +33,7 @@
 ## Особенности связки и параметры железа
 
 - **Физически протестированный стенд**:
-  - **Материнская плата**: Huananzhi X99-F8D Plus (Dual LGA2011-3, чипсет Intel C612 / X99, UEFI AMI Aptio IV/V).
+  - **Материнская плата**: Huananzhi X99-F8D Plus (Dual LGA2011-3, чипсет Intel C612 / X99, UEFI AMI Aptio V).
   - **Процессоры**: 2 × Intel Xeon E5-2696 v3 (Haswell-EP, 36 ядер / 72 потока).
   - **Видеокарта**: Gigabyte GeForce RTX 4070 Ti WINDFORCE OC (AD104-400, PCI ID `10de:2782`, Subsystem `1458:40e8`, ревизия A1).
 - **Строгая адресация VBIOS по Hardware ID**:
