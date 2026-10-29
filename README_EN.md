@@ -113,8 +113,8 @@ USB_ROOT/
 **Recommended Boot Sequence:**
 1. Disable **Secure Boot** in BIOS settings.
 2. In the **`Boot`** tab, set your USB flash drive as **Boot Option #1** and save settings (`F10`).
-3. **Completely power down the PC** (flip the power supply switch or unplug the AC power cord for 10 seconds to fully drain capacitors and put the GPU into a clean hardware Cold Reset).
-4. Power on the PC — the motherboard will cold-boot directly into the USB bootloader.
+3. **Shut down the PC** — a standard system shutdown is sufficient (no need to unplug the power cord or flip the PSU switch).
+4. Power on the PC via the power button — the motherboard will cold-boot directly into the USB bootloader.
 5. The bootloader text menu will appear. Press **`U`** (once) to apply the unlock.  
    *(Pressing `S`, `Esc`, or waiting 10 seconds boots stock Windows without modifying GPU state).*
 6. The display will freeze for 2-3 seconds (GOP release, microcode injection, and handover to `bootmgfw.efi`), followed by normal Windows 11 startup.
