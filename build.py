@@ -8,10 +8,21 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
 PROJECT_DIR = ROOT
-GPU_UNLOCK_ROOT = ROOT.parent
-W64DEVKIT = GPU_UNLOCK_ROOT / "tools" / "w64devkit" / "bin"
-GCC = str(W64DEVKIT / "gcc.exe")
-LD = str(W64DEVKIT / "x86_64-w64-mingw32-ld.exe")
+
+# Search for w64devkit in parent hierarchy
+w64devkit_bin = None
+for p in [ROOT, *ROOT.parents]:
+    candidate = p / "tools" / "w64devkit" / "bin"
+    if candidate.exists() and (candidate / "gcc.exe").exists():
+        w64devkit_bin = candidate
+        break
+
+if w64devkit_bin:
+    GCC = str(w64devkit_bin / "gcc.exe")
+    LD = str(w64devkit_bin / "x86_64-w64-mingw32-ld.exe")
+else:
+    GCC = "gcc"
+    LD = "x86_64-w64-mingw32-ld"
 EDK2_INC = PROJECT_DIR / "vendor" / "edk2" / "Include"
 
 BUILD_DIR = PROJECT_DIR / "build"
