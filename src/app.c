@@ -231,13 +231,13 @@ EFI_STATUS EFIAPI UefiMain(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable
 
     /* 3. Interactive Menu */
     PrintColor(EFI_YELLOW | EFI_BLACK, L"Boot Options:\r\n");
-    Print(L"  [U] Unlock All Ready GPUs & Boot Windows (Automatic in 10s)\r\n");
+    Print(L"  [U] Unlock All Ready GPUs & Boot Windows (Automatic in 30s)\r\n");
     Print(L"  [S] Boot Stock Windows (Bypass Unlock)\r\n\r\n");
     Print(L"Choice [U/S]: ");
 
     EFI_INPUT_KEY key;
     BOOLEAN unlock = TRUE;
-    UINTN seconds = 10;
+    UINTN seconds = 30;
 
     while (seconds > 0) {
         EFI_STATUS ks = gST->ConIn->ReadKeyStroke(gST->ConIn, &key);
