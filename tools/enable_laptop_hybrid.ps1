@@ -24,7 +24,7 @@ $ErrorActionPreference = "Stop"
 
 Write-Host "======================================================================" -ForegroundColor Cyan
 Write-Host "   WINDOWS HYBRID / OPTIMUS LAPTOP D3cold FIX FOR GPU UNLOCK          " -ForegroundColor White
-Write-Host "   Research & Discovery: Mayhem50 (upstream Issue #117)               " -ForegroundColor Yellow
+Write-Host "   Research & Discovery: Mayhem50 (JustAResearcher/gpu-unlock-ada#117)               " -ForegroundColor Yellow
 Write-Host "======================================================================" -ForegroundColor Cyan
 Write-Host ""
 
@@ -110,3 +110,4 @@ if ($foundCount -eq 0) {
         Write-Host "======================================================================" -ForegroundColor Cyan
     }
 }
+
