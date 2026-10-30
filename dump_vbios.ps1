@@ -27,7 +27,7 @@ function Get-VbiosDevId($filePath) {
     try {
         $bytes = [System.IO.File]::ReadAllBytes($filePath)
         for ($pos = 0; $pos -lt [Math]::Min($bytes.Length - 0x20, 0x100000); $pos += 512) {
-            if ($bytes[$pos] -eq 0x55 -and $bytes[$pos+1] -eq 0xAA) {
+            if ($bytes[$pos] -eq 0x55 -and $bytes[$pos + 1] -eq 0xAA) {
                 $pcirRel = [BitConverter]::ToUInt16($bytes, $pos + 0x18)
                 $pcir = $pos + $pcirRel
                 if ($pcir + 8 -le $bytes.Length) {
@@ -42,7 +42,8 @@ function Get-VbiosDevId($filePath) {
                 }
             }
         }
-    } catch {}
+    }
+    catch {}
     return $null
 }
 
@@ -78,7 +79,8 @@ foreach ($gpu in $gpus) {
         if ($processedIds.ContainsKey($romName)) {
             Write-Host "      [INFO] Identical hardware ID already dumped by sibling card." -ForegroundColor Green
             Write-Host "             The same file covers both cards automatically in UEFI loader!" -ForegroundColor Green
-        } else {
+        }
+        else {
             $processedIds[$romName] = $true
             $dumpSuccess = $false
 
@@ -103,7 +105,8 @@ foreach ($gpu in $gpus) {
                             Write-Host "      [SUCCESS] Verified VBIOS dump for DevID 0x$devId via nvflashk --index=$candidateIdx ($sizeKb KB)" -ForegroundColor Green
                             $dumpSuccess = $true
                             break
-                        } else {
+                        }
+                        else {
                             Write-Host "      [MISMATCH] nvflashk index $candidateIdx returned DevID 0x$foundDev (expected 0x$devId). Discarding..." -ForegroundColor Yellow
                             Remove-Item $targetPath -Force -ErrorAction SilentlyContinue
                         }
@@ -117,7 +120,8 @@ foreach ($gpu in $gpus) {
                 Write-Host "                      $targetPath" -ForegroundColor Yellow
             }
         }
-    } else {
+    }
+    else {
         Write-Host "      [!] Could not parse Hardware ID from PNP ID." -ForegroundColor Red
     }
     $index++
