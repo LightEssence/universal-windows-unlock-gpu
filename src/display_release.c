@@ -75,6 +75,35 @@ EFI_STATUS RestoreGpuPciDecode(DETECTED_GPU *gpu)
     return EFI_SUCCESS;
 }
 
+static EFI_GUID GopGuid = EFI_GRAPHICS_OUTPUT_PROTOCOL_GUID;
+
+static BOOLEAN CheckFileExistsOnBootVolume(CONST CHAR16 *path)
+{
+    EFI_LOADED_IMAGE_PROTOCOL *loaded = NULL;
+    EFI_GUID loaded_guid = EFI_LOADED_IMAGE_PROTOCOL_GUID;
+    EFI_GUID fs_guid = EFI_SIMPLE_FILE_SYSTEM_PROTOCOL_GUID;
+    EFI_STATUS s = gBS->HandleProtocol(gImageHandle, &loaded_guid, (VOID **)&loaded);
+    if (EFI_ERROR(s) || !loaded || !loaded->DeviceHandle) return FALSE;
+
+    EFI_SIMPLE_FILE_SYSTEM_PROTOCOL *fs = NULL;
+    s = gBS->HandleProtocol(loaded->DeviceHandle, &fs_guid, (VOID **)&fs);
+    if (EFI_ERROR(s) || !fs) return FALSE;
+
+    EFI_FILE_HANDLE root = NULL;
+    s = fs->OpenVolume(fs, &root);
+    if (EFI_ERROR(s) || !root) return FALSE;
+
+    EFI_FILE_HANDLE f = NULL;
+    s = root->Open(root, &f, (CHAR16 *)path, EFI_FILE_MODE_READ, 0);
+    if (!EFI_ERROR(s) && f) {
+        f->Close(f);
+        root->Close(root);
+        return TRUE;
+    }
+    root->Close(root);
+    return FALSE;
+}
+
 EFI_STATUS ReconnectGpuDisplay(DETECTED_GPU *gpu)
 {
     if (!gpu || !gpu->handle) {
@@ -85,35 +114,67 @@ EFI_STATUS ReconnectGpuDisplay(DETECTED_GPU *gpu)
         return EFI_SUCCESS;
     }
 
-    LogWrite("[Display] Reconnecting UEFI GOP display driver...\n");
-
-    /* 1. Reconnect GOP driver recursively to the GPU controller handle */
-    EFI_STATUS status = gBS->ConnectController(gpu->handle, NULL, NULL, TRUE);
-    if (EFI_ERROR(status)) {
-        LogWrite("[Display] ConnectController on GPU handle returned %#llx\n", (unsigned long long)status);
+    /* Check for override markers on boot media root */
+    if (CheckFileExistsOnBootVolume(L"\\no-reconnect.txt") ||
+        CheckFileExistsOnBootVolume(L"no-reconnect.txt")) {
+        LogWrite("[Display] Reconnect skipped (no-reconnect.txt detected on boot media).\n"
+                 "          bootmgfw.efi will self-establish GOP console on start.\n");
+        return EFI_SUCCESS;
     }
 
-    /* 2. Reconnect system console out handle if present */
-    if (gST && gST->ConsoleOutHandle) {
-        gBS->ConnectController(gST->ConsoleOutHandle, NULL, NULL, TRUE);
-    }
+    BOOLEAN force_recursive = CheckFileExistsOnBootVolume(L"\\tx-reconnect-recursive.txt") ||
+                              CheckFileExistsOnBootVolume(L"tx-reconnect-recursive.txt");
 
-    /* 3. Reset and reinitialize UEFI console */
-    if (gST && gST->ConOut) {
-        gST->ConOut->Reset(gST->ConOut, FALSE);
-        gST->ConOut->SetAttribute(gST->ConOut, EFI_LIGHTGRAY | EFI_BLACK);
-    }
+    LogWrite("[Display] Preparing UEFI GOP reconnect (recursive=%s)...\n",
+             force_recursive ? "TRUE" : "FALSE");
 
-    /* 4. Ensure PCI Command register has Memory and IO space enabled for Windows */
+    /* 1. Ensure PCI Command has IO (0x1), Memory (0x2), and Bus Master (0x4) enabled BEFORE GOP connects */
     if (gpu->pci_io && gpu->pci_io->Pci.Read && gpu->pci_io->Pci.Write) {
         UINT16 cmd = 0;
         gpu->pci_io->Pci.Read(gpu->pci_io, EfiPciIoWidthUint16, 4, 1, &cmd);
-        if ((cmd & 0x0003) != 0x0003) {
-            cmd |= 0x0003;
-            gpu->pci_io->Pci.Write(gpu->pci_io, EfiPciIoWidthUint16, 4, 1, &cmd);
+        cmd |= 0x0007; /* Enable IO, Memory, and Bus Master for vendor GOP driver operation */
+        gpu->pci_io->Pci.Write(gpu->pci_io, EfiPciIoWidthUint16, 4, 1, &cmd);
+        LogWrite("[Display] PCI Command primed for GOP driver: %#06x\n", cmd);
+    }
+
+    /* 2. Wait 200ms for PCIe link and GPU firmware to settle post-FLR before binding GOP driver */
+    LogWrite("[Display] Waiting 200ms for post-FLR link and GPU settling...\n");
+    gBS->Stall(200000);
+
+    /* 3. Reconnect GOP driver to GPU handle.
+     * By default, recursive=FALSE binds the vendor GOP driver directly to the GPU handle,
+     * producing EFI_GRAPHICS_OUTPUT_PROTOCOL for Windows Boot Manager without deadlocking
+     * the firmware ConSplitter/ConsoleOut tree (as seen on modern ASUS/MSI/Gigabyte boards).
+     */
+    LogWrite("[Display] Calling gBS->ConnectController(gpu->handle, recursive=%s)...\n",
+             force_recursive ? "TRUE" : "FALSE");
+    EFI_STATUS status = gBS->ConnectController(gpu->handle, NULL, NULL, force_recursive);
+    LogWrite("[Display] ConnectController on GPU handle returned %#llx\n", (unsigned long long)status);
+
+    /* 4. If forced recursive, reconnect system console and reset text mode */
+    if (force_recursive) {
+        if (gST && gST->ConsoleOutHandle) {
+            LogWrite("[Display] Reconnecting ConsoleOutHandle...\n");
+            gBS->ConnectController(gST->ConsoleOutHandle, NULL, NULL, TRUE);
+        }
+        if (gST && gST->ConOut) {
+            LogWrite("[Display] Resetting console...\n");
+            gST->ConOut->Reset(gST->ConOut, FALSE);
+            gST->ConOut->SetAttribute(gST->ConOut, EFI_LIGHTGRAY | EFI_BLACK);
         }
     }
 
-    LogWrite("[Display] Display GOP and UEFI console reconnected successfully\n");
+    /* 5. Check if GOP protocol is available in the system for bootmgfw */
+    UINTN gop_count = 0;
+    EFI_HANDLE *gop_handles = NULL;
+    EFI_STATUS g_stat = gBS->LocateHandleBuffer(ByProtocol, &GopGuid, NULL, &gop_count, &gop_handles);
+    if (!EFI_ERROR(g_stat)) {
+        LogWrite("[Display] Active GOP instances in system: %u\n", (unsigned)gop_count);
+        if (gop_handles) gBS->FreePool(gop_handles);
+    } else {
+        LogWrite("[Display] Note: LocateHandleBuffer for GOP returned %#llx\n", (unsigned long long)g_stat);
+    }
+
+    LogWrite("[Display] Display reconnect sequence completed successfully\n");
     return EFI_SUCCESS;
 }

@@ -1,4 +1,6 @@
-/* Modified 2026-10-19/20 for Windows GPU UNLOCK; changes documented in CHANGES.md. */ #include "checks.h"
+/* Modified 2026-10-19/20 for Windows GPU UNLOCK; changes documented in CHANGES.md. */
+#include "checks.h"
+#include "logger.h"
 #include <IndustryStandard/Pci.h>
 
 #define GU_CONFIG_BYTES 256U
@@ -24,19 +26,53 @@ BOOLEAN GuCheckConfig(const UINT32 Config[64], UINTN Segment, UINTN Bus,
   UINTN Pointer, Steps = 0;
   UINT16 Command;
 
-  if (Out == NULL || Config == NULL) return FALSE;
-  *Out = Caps;
-  (void)Segment; (void)Bus; (void)Device; (void)Function;
-  if (ConfigByte(Config, 0x0b) != PCI_CLASS_DISPLAY ||
-      (ConfigByte(Config, PCI_HEADER_TYPE_OFFSET) & 0x7fU) != HEADER_TYPE_DEVICE)
+  if (Out == NULL || Config == NULL) {
+    LogWrite("[GuCheckConfig] Bus %u:%u.%u: Error - NULL parameter passed (Out=%p Config=%p)\n",
+             (unsigned)Bus, (unsigned)Device, (unsigned)Function, Out, Config);
     return FALSE;
+  }
+  *Out = Caps;
+  (void)Segment;
+
+  if (ConfigByte(Config, 0x0b) != PCI_CLASS_DISPLAY) {
+    LogWrite("[GuCheckConfig] Bus %u:%u.%u: Rejected - Class byte %#x != PCI_CLASS_DISPLAY (0x03)\n",
+             (unsigned)Bus, (unsigned)Device, (unsigned)Function, ConfigByte(Config, 0x0b));
+    return FALSE;
+  }
+
+  if ((ConfigByte(Config, PCI_HEADER_TYPE_OFFSET) & 0x7fU) != HEADER_TYPE_DEVICE) {
+    LogWrite("[GuCheckConfig] Bus %u:%u.%u: Rejected - Header type %#x != HEADER_TYPE_DEVICE (0x00)\n",
+             (unsigned)Bus, (unsigned)Device, (unsigned)Function, ConfigByte(Config, PCI_HEADER_TYPE_OFFSET) & 0x7fU);
+    return FALSE;
+  }
 
   Command = ConfigWord(Config, PCI_COMMAND_OFFSET);
-  if ((Command & EFI_PCI_COMMAND_MEMORY_SPACE) == 0 ||
-      (Command & EFI_PCI_COMMAND_BUS_MASTER) != 0 ||
-      (Config[PCI_EXPANSION_ROM_BASE / 4] & 1U) != 0 ||
-      (ConfigWord(Config, PCI_PRIMARY_STATUS_OFFSET) & EFI_PCI_STATUS_CAPABILITY) == 0)
+  UINT16 Status = ConfigWord(Config, PCI_PRIMARY_STATUS_OFFSET);
+  UINT32 RomBase = Config[PCI_EXPANSION_ROM_BASE / 4];
+
+  if ((Command & EFI_PCI_COMMAND_MEMORY_SPACE) == 0) {
+    LogWrite("[GuCheckConfig] Bus %u:%u.%u: Rejected - Memory Space disabled in Command (%#06x, bit 1 is 0)\n",
+             (unsigned)Bus, (unsigned)Device, (unsigned)Function, Command);
     return FALSE;
+  }
+
+  if ((Command & EFI_PCI_COMMAND_BUS_MASTER) != 0) {
+    LogWrite("[GuCheckConfig] Bus %u:%u.%u: Rejected - Bus Master enabled in Command (%#06x, bit 2 is 1)\n",
+             (unsigned)Bus, (unsigned)Device, (unsigned)Function, Command);
+    return FALSE;
+  }
+
+  if ((RomBase & 1U) != 0) {
+    LogWrite("[GuCheckConfig] Bus %u:%u.%u: Rejected - Expansion ROM decode active (%#x, bit 0 is 1)\n",
+             (unsigned)Bus, (unsigned)Device, (unsigned)Function, RomBase);
+    return FALSE;
+  }
+
+  if ((Status & EFI_PCI_STATUS_CAPABILITY) == 0) {
+    LogWrite("[GuCheckConfig] Bus %u:%u.%u: Rejected - PCI Status (%#06x) lacks Capabilities List (bit 4 is 0)\n",
+             (unsigned)Bus, (unsigned)Device, (unsigned)Function, Status);
+    return FALSE;
+  }
 
   Pointer = ConfigByte(Config, PCI_CAPABILITY_POINTER_OFFSET);
   while (Pointer != 0) {
@@ -44,67 +80,117 @@ BOOLEAN GuCheckConfig(const UINT32 Config[64], UINTN Segment, UINTN Bus,
     UINT16 Control;
     UINT8 Id, Next;
     UINT64 Bit;
-    if (++Steps > GU_CAP_LIMIT || Pointer < GU_CAP_START || Pointer > GU_CAP_LAST ||
-        (Pointer & 3U) != 0)
+    if (++Steps > GU_CAP_LIMIT) {
+      LogWrite("[GuCheckConfig] Bus %u:%u.%u: Rejected - Cap list step count (%zu) exceeded limit (%u)\n",
+               (unsigned)Bus, (unsigned)Device, (unsigned)Function, Steps, GU_CAP_LIMIT);
       return FALSE;
+    }
+    if (Pointer < GU_CAP_START || Pointer > GU_CAP_LAST || (Pointer & 3U) != 0) {
+      LogWrite("[GuCheckConfig] Bus %u:%u.%u: Rejected - Invalid cap pointer %#zx (expected 0x40-0xfc, 4-byte aligned)\n",
+               (unsigned)Bus, (unsigned)Device, (unsigned)Function, Pointer);
+      return FALSE;
+    }
     Bit = (UINT64)1U << (Pointer / 4U);
-    if ((Seen & Bit) != 0) return FALSE;
+    if ((Seen & Bit) != 0) {
+      LogWrite("[GuCheckConfig] Bus %u:%u.%u: Rejected - Cap loop detected at offset %#zx\n",
+               (unsigned)Bus, (unsigned)Device, (unsigned)Function, Pointer);
+      return FALSE;
+    }
     Seen |= Bit;
 
     Id = ConfigByte(Config, Pointer);
     Next = ConfigByte(Config, Pointer + 1U);
     Control = ConfigWord(Config, Pointer + 2U);
+
     switch (Id) {
       case EFI_PCI_CAPABILITY_ID_PMI:
-        if (Caps.pm != 0 || (Control & 7U) == 0 || (Control & 7U) > 3)
+        if (Caps.pm != 0 || (Control & 7U) == 0 || (Control & 7U) > 3) {
+          LogWrite("[GuCheckConfig] Bus %u:%u.%u: Rejected - Invalid PMI cap at %#zx (already=%u, Control=%#x)\n",
+                   (unsigned)Bus, (unsigned)Device, (unsigned)Function, Pointer, Caps.pm, Control);
           return FALSE;
+        }
         Length = 8;
         break;
       case EFI_PCI_CAPABILITY_ID_MSI:
-        if (Caps.msi != 0 || (Control & 1U) != 0) return FALSE;
+        if (Caps.msi != 0 || (Control & 1U) != 0) {
+          LogWrite("[GuCheckConfig] Bus %u:%u.%u: Rejected - Invalid MSI cap at %#zx (already=%u, Control=%#x)\n",
+                   (unsigned)Bus, (unsigned)Device, (unsigned)Function, Pointer, Caps.msi, Control);
+          return FALSE;
+        }
         /* Mask-capable layouts include two reserved bytes after Message Data. */
         Length = (Control & 0x80U) != 0 ? 14U : 10U;
         if ((Control & 0x100U) != 0) Length += 10U;
         break;
       case PCI_EXPRESS_CAPABILITY_ID:
         if (Caps.pcie != 0 || (Control & 0x0fU) < 1 ||
-            (Control & 0x0fU) > 2 || ((Control >> 4U) & 0x0fU) > 1)
+            (Control & 0x0fU) > 2 || ((Control >> 4U) & 0x0fU) > 1) {
+          LogWrite("[GuCheckConfig] Bus %u:%u.%u: Rejected - Invalid PCIe cap at %#zx (already=%u, Control=%#x, ver=%u, type=%u)\n",
+                   (unsigned)Bus, (unsigned)Device, (unsigned)Function, Pointer, Caps.pcie, Control, (Control & 0x0fU), ((Control >> 4U) & 0x0fU));
           return FALSE;
+        }
         /* Endpoint v1 reaches Link Status; reserve the entire v2 layout. */
         Length = (Control & 0x0fU) == 1 ? 0x14U : 0x3cU;
         break;
       case GU_MSIX_ID:
-        if (Caps.msix != 0 || (Control & 0x8000U) != 0) return FALSE;
+        if (Caps.msix != 0 || (Control & 0x8000U) != 0) {
+          LogWrite("[GuCheckConfig] Bus %u:%u.%u: Rejected - Invalid MSI-X cap at %#zx (already=%u, Control=%#x)\n",
+                   (unsigned)Bus, (unsigned)Device, (unsigned)Function, Pointer, Caps.msix, Control);
+          return FALSE;
+        }
         Length = 12;
         break;
       case EFI_PCI_CAPABILITY_ID_VENDOR:
         Length = Control & 0xffU;
-        if (Length < 3) return FALSE;
+        if (Length < 3) {
+          LogWrite("[GuCheckConfig] Bus %u:%u.%u: Rejected - Vendor cap length < 3 (%zu) at %#zx\n",
+                   (unsigned)Bus, (unsigned)Device, (unsigned)Function, Length, Pointer);
+          return FALSE;
+        }
         break;
       default:
         /* A format we do not understand cannot be checked for overlap/length. */
+        LogWrite("[GuCheckConfig] Bus %u:%u.%u: Rejected - Unknown/unhandled PCI capability ID %#04x at %#zx (Next=%#x Control=%#06x)\n",
+                 (unsigned)Bus, (unsigned)Device, (unsigned)Function, Id, Pointer, Next, Control);
         return FALSE;
     }
 
-    if (Length > GU_CONFIG_BYTES - Pointer) return FALSE;
+    if (Length > GU_CONFIG_BYTES - Pointer) {
+      LogWrite("[GuCheckConfig] Bus %u:%u.%u: Rejected - Cap ID %#x at %#zx length %zu exceeds config space (%u)\n",
+               (unsigned)Bus, (unsigned)Device, (unsigned)Function, Id, Pointer, Length, GU_CONFIG_BYTES);
+      return FALSE;
+    }
     for (I = Pointer; I < Pointer + Length; ++I) {
-      if (Occupied[I - GU_CAP_START] != 0) return FALSE;
+      if (Occupied[I - GU_CAP_START] != 0) {
+        LogWrite("[GuCheckConfig] Bus %u:%u.%u: Rejected - Cap ID %#x at %#zx overlaps occupied byte %#zx\n",
+                 (unsigned)Bus, (unsigned)Device, (unsigned)Function, Id, Pointer, I);
+        return FALSE;
+      }
       Occupied[I - GU_CAP_START] = 1;
     }
 
     switch (Id) {
       case EFI_PCI_CAPABILITY_ID_PMI:
-        if ((ConfigWord(Config, Pointer + 4U) & 3U) != PCI_POWER_STATE_D0)
+        if ((ConfigWord(Config, Pointer + 4U) & 3U) != PCI_POWER_STATE_D0) {
+          LogWrite("[GuCheckConfig] Bus %u:%u.%u: Rejected - PMI power state != D0 (%#x) at %#zx\n",
+                   (unsigned)Bus, (unsigned)Device, (unsigned)Function, ConfigWord(Config, Pointer + 4U) & 3U, Pointer);
           return FALSE;
+        }
         Caps.pm = (UINT16)Pointer;
         break;
       case EFI_PCI_CAPABILITY_ID_MSI:
         Caps.msi = (UINT16)Pointer;
         break;
       case PCI_EXPRESS_CAPABILITY_ID:
-        if ((Config[(Pointer + 4U) / 4U] & (1U << 28U)) == 0 ||
-            (ConfigWord(Config, Pointer + 8U) & 0x8000U) != 0)
+        if ((Config[(Pointer + 4U) / 4U] & (1U << 28U)) == 0) {
+          LogWrite("[GuCheckConfig] Bus %u:%u.%u: Rejected - PCIe lacks FLR capability (DevCaps=%#010x, bit 28 is 0) at %#zx\n",
+                   (unsigned)Bus, (unsigned)Device, (unsigned)Function, Config[(Pointer + 4U) / 4U], Pointer);
           return FALSE;
+        }
+        if ((ConfigWord(Config, Pointer + 8U) & 0x8000U) != 0) {
+          LogWrite("[GuCheckConfig] Bus %u:%u.%u: Rejected - PCIe DevCtl has FLR bit 0x8000 active at %#zx\n",
+                   (unsigned)Bus, (unsigned)Device, (unsigned)Function, Pointer);
+          return FALSE;
+        }
         Caps.pcie = (UINT16)Pointer;
         Caps.pcie_version = (UINT8)(Control & 0x0fU);
         break;
@@ -116,7 +202,15 @@ BOOLEAN GuCheckConfig(const UINT32 Config[64], UINTN Segment, UINTN Bus,
     }
     Pointer = Next;
   }
-  if (Caps.pm == 0 || Caps.pcie == 0) return FALSE;
+
+  if (Caps.pm == 0 || Caps.pcie == 0) {
+    LogWrite("[GuCheckConfig] Bus %u:%u.%u: Rejected - Missing mandatory capabilities (PM=%#x PCIe=%#x)\n",
+             (unsigned)Bus, (unsigned)Device, (unsigned)Function, Caps.pm, Caps.pcie);
+    return FALSE;
+  }
+
+  LogWrite("[GuCheckConfig] Bus %u:%u.%u: Verified OK (PM=%#x PCIe=%#x v%u MSI=%#x MSIX=%#x)\n",
+           (unsigned)Bus, (unsigned)Device, (unsigned)Function, Caps.pm, Caps.pcie, Caps.pcie_version, Caps.msi, Caps.msix);
   *Out = Caps;
   return TRUE;
 }
