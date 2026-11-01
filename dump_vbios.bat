@@ -21,7 +21,8 @@ echo ========================================================
 echo   UNIVERSAL VBIOS DUMP (Multi-GPU nvflashk Fallback)
 echo ========================================================
 
-set "NVFLASH=%~dp0nvflashk.exe"
+set "NVFLASH=%~dp0tools\nvflashk.exe"
+if not exist "!NVFLASH!" set "NVFLASH=%~dp0nvflashk.exe"
 if not exist "!NVFLASH!" set "NVFLASH=%~dp0..\nvflashk.exe"
 
 if not exist "!NVFLASH!" (

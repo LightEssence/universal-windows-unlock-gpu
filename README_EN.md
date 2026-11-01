@@ -93,10 +93,29 @@ USB_ROOT/
 │       ├── 10de_2782_1458_40e8.rom  <-- Dump of GPU 0 (RTX 4070 Ti)
 │       └── 10de_2504_1458_40e2.rom  <-- Dump of GPU 1 (RTX 3060)
 ├── copy_to_usb.bat                  <-- 1-click quick deploy
+├── dump_vbios.bat                   <-- 1-click VBIOS dumping
+├── tools/
+│   ├── nvflashk.exe                 <-- Patched VBIOS dumper (Ada / Ampere)
+│   └── w64devkit.7z.exe             <-- Standalone GCC / MinGW-w64 toolchain
 ```
 3. Dump your card's VBIOS directly from Windows using `dump_vbios.bat`.
 4. Plug the USB drive into your PC and select it from the BIOS Boot Menu (F11 / F12).
 5. The bootloader detects all supported cards and unlocks them in RAM within 30 seconds (or immediately upon pressing `U`), passing control smoothly to Windows.
+
+---
+
+## Bundled Binaries & Toolchains (`tools/` & `UNIVERSAL-ASSETS/`)
+
+All binaries and toolchain components are bundled in the repository for seamless out-of-the-box usage:
+
+| Path / File | Purpose | Size | Description |
+| :--- | :--- | :--- | :--- |
+| **`tools/nvflashk.exe`** | Patched NVIDIA VBIOS Dumper & Flasher | ~19.8 MB | Custom `nvflashk` (v5.821) by *notfromstatefarm*. Enables dumping exact factory VBIOS ROMs from Ada Lovelace (RTX 40) and Ampere (RTX 30) cards under Windows. |
+| **`tools/w64devkit.7z.exe`** | Portable C99/MinGW-w64 Toolchain | ~64.1 MB | Complete portable GCC 16.2 / GNU ld toolchain for building `BOOTX64.EFI` on Windows (`python build.py`). Auto-extracts to `tools/w64devkit/` upon invocation. |
+| **`UNIVERSAL-ASSETS/*.bin`** | Official NVIDIA GSP & Booter Firmware | ~85 MB | 9 official firmware microcodes (including `gsp_ga10x.bin`, `booter_load` stages, and PLM selectors `v67`), required for UEFI In-RAM cold boot initialization. |
+| **`dist/EFI/BOOT/BOOTX64.EFI`** | Prebuilt Standalone UEFI Loader | ~135 KB | Precompiled In-RAM unlock bootloader for FAT32 USB drives without requiring physical SPI flashing. |
+| **`dump_vbios.bat`** / **`.ps1`** | 1-Click VBIOS Dumper | — | Probes PCI topology, calls `tools/nvflashk.exe`, and formats output ROM files strictly by hardware IDs into `EFI/VBIOS/`. |
+| **`copy_to_usb.bat`** / **`.ps1`** | 1-Click USB Deployment | — | Deploys EFI bootloader, microcodes, VBIOS dumps, and utilities to any selected USB drive letter. |
 
 ---
 

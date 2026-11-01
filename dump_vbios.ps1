@@ -14,9 +14,12 @@ if (-not (Test-Path $VbiosDir)) {
     New-Item -ItemType Directory -Path $VbiosDir -Force | Out-Null
 }
 
-$Nvflash = Join-Path $ScriptDir "..\nvflashk.exe"
+$Nvflash = Join-Path $ScriptDir "tools\nvflashk.exe"
 if (-not (Test-Path $Nvflash)) {
     $Nvflash = Join-Path $ScriptDir "nvflashk.exe"
+}
+if (-not (Test-Path $Nvflash)) {
+    $Nvflash = Join-Path $ScriptDir "..\nvflashk.exe"
 }
 if (-not (Test-Path $Nvflash)) {
     $Nvflash = "nvflashk.exe"

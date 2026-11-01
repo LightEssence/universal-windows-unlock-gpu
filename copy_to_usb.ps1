@@ -30,7 +30,11 @@ if (Test-Path "$repo\dump_vbios.bat") { Copy-Item -Path "$repo\dump_vbios.bat" -
 if (Test-Path "$repo\dump_vbios.ps1") { Copy-Item -Path "$repo\dump_vbios.ps1" -Destination "$DriveLetter\" -Force }
 if (Test-Path "$repo\enable_laptop_hybrid.bat") { Copy-Item -Path "$repo\enable_laptop_hybrid.bat" -Destination "$DriveLetter\" -Force }
 if (Test-Path "$repo\enable_laptop_hybrid.ps1") { Copy-Item -Path "$repo\enable_laptop_hybrid.ps1" -Destination "$DriveLetter\" -Force }
-if (Test-Path "$repo\nvflashk.exe") {
+if (Test-Path "$repo\tools\nvflashk.exe") {
+    Copy-Item -Path "$repo\tools\nvflashk.exe" -Destination "$DriveLetter\" -Force
+} elseif (Test-Path "$repo\tools\nvflashk.exe") {
+    Copy-Item -Path "$repo\tools\nvflashk.exe" -Destination "$DriveLetter\" -Force
+} elseif (Test-Path "$repo\nvflashk.exe") {
     Copy-Item -Path "$repo\nvflashk.exe" -Destination "$DriveLetter\" -Force
 } elseif (Test-Path "$repo\..\nvflashk.exe") {
     Copy-Item -Path "$repo\..\nvflashk.exe" -Destination "$DriveLetter\" -Force

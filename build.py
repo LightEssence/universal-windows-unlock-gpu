@@ -28,6 +28,18 @@ for p in [ROOT, *ROOT.parents]:
     except Exception:
         pass
 
+if not w64devkit_bin:
+    archive = ROOT / "tools" / "w64devkit.7z.exe"
+    if archive.exists():
+        print("  [*] Extracting w64devkit toolchain from tools/w64devkit.7z.exe...")
+        try:
+            subprocess.run([str(archive), "-y"], cwd=str(ROOT / "tools"), check=True)
+            candidate = ROOT / "tools" / "w64devkit" / "bin"
+            if candidate.exists() and (candidate / "gcc.exe").exists():
+                w64devkit_bin = candidate
+        except Exception as e:
+            print(f"  [!] Auto-extract failed: {e}")
+
 if w64devkit_bin:
     GCC = str(w64devkit_bin / "gcc.exe")
     LD = str(w64devkit_bin / "x86_64-w64-mingw32-ld.exe")

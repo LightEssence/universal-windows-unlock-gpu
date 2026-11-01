@@ -8,8 +8,14 @@ build/
 *.bin
 !UNIVERSAL-ASSETS/*.bin
 *.exe
+!tools/nvflashk.exe
 usb_release_staging/
 dist/EFI/VBIOS/*.rom
+
+# Toolchains and third-party binaries
+tools/w64devkit/
+tools/*.7z.exe
+!tools/w64devkit.7z.exe
 
 # IDE and OS
 .vscode/

@@ -29,7 +29,11 @@ def package_drive(target_path: Path):
     print(f"  [+] Installed dump_vbios.bat & dump_vbios.ps1")
 
     # 3. Copy nvflashk.exe if available
-    nvflashk = GPU_ROOT / "nvflashk.exe"
+    nvflashk = GPU_ROOT / "tools" / "nvflashk.exe"
+    if not nvflashk.exists():
+        nvflashk = GPU_ROOT / "tools" / "nvflashk.exe"
+    if not nvflashk.exists():
+        nvflashk = GPU_ROOT / "nvflashk.exe"
     if nvflashk.exists():
         shutil.copy2(nvflashk, target_path / "nvflashk.exe")
         print(f"  [+] Installed nvflashk.exe")
