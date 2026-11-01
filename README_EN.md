@@ -20,6 +20,7 @@ Testing was conducted on physical hardware under **Windows 11 x64** on a dual-so
 | :--- | :--- | :---:| :---:| :---:| :---:|
 | **GPU 0: RTX 4070 Ti 12GB** <br>*(Ada Lovelace AD104, 60 SM)* | **BF16 Tensor Cores** <br>**FP16 Tensor Cores** <br>**FP32 CUDA Cores** | 75.0 TFLOPS <br>74.0 TFLOPS <br>28.0 TFLOPS | **146.94 TFLOPS** <br>**142.22 TFLOPS** <br>**28.30 TFLOPS** | **+95.9% (2x FASTER!)** 🔥 <br>**+92.2% gain** 🔥 <br>Parity (CUDA cores not throttled) | `SS0=0x88888888` <br>`SS1=0x8` |
 | **GPU 1: RTX 3060 12GB** <br>*(Ampere GA106, 28 SM)* | **BF16 Tensor Cores** <br>**FP16 Tensor Cores** <br>**FP32 CUDA Cores** | 25.6 TFLOPS <br>25.6 TFLOPS <br>9.6 TFLOPS | **49.57 TFLOPS** <br>**48.07 TFLOPS** <br>**9.65 TFLOPS** | **+93.6% (2x FASTER!)** 🔥 <br>**+87.8% gain** 🔥 <br>Parity (CUDA cores not throttled) | `SS0=0x88888888` <br>`SS1=0x8` |
+| **GPU: RTX 3080 Ti 12GB (eGPU)** <br>*(Ampere GA102, OCuLink bus 0x65, GMK EVO-X3)* | **BF16 Tensor Cores** <br>**FP16 Tensor Cores** <br>**TF32 Tensor Cores** <br>**FP32 Standard** | 67.2 TFLOPS <br>66.7 TFLOPS <br>33.8 TFLOPS <br>23.4 TFLOPS | **112.2 TFLOPS** <br>**109.4 TFLOPS** <br>**56.0 TFLOPS** <br>**23.1 TFLOPS** | **+67.0% (1.67x) gain** 🔥 <br>**+64.0% (1.64x) gain** 🔥 <br>**+65.7% (1.66x) gain** 🔥 <br>Parity (0.99x control) | `SS0=0x88888888` <br>`SS1=0x8` |
 
 > [!NOTE]
 > **Physical Mechanics & Throttle Removal (SS0 / SS1)**:
@@ -161,3 +162,16 @@ To solve this, our repository includes an automated registry configurator:
 3. Preserves iGPU display driving and physical screen brightness control.
 *(To revert to Windows defaults: `powershell -File tools\enable_laptop_hybrid.ps1 -Restore`).*
 
+
+
+---
+
+## eGPU & OCuLink External Graphics Support
+
+*(Research, troubleshooting, and verification on the OCuLink platform: **joogle8888** in upstream [windows-GPU-UNLOCK#164](https://github.com/windows-GPU-UNLOCK/Windows-GPU-UNLOCK/issues/164) and [joogle8888/evo-x3-3080ti-unlock](https://github.com/joogle8888/evo-x3-3080ti-unlock))*
+
+When connecting GPUs via external PCIe interfaces such as **OCuLink**, **Thunderbolt**, or **USB4** (e.g. mini-PCs like the *GMKtec EVO-X3* featuring AMD Ryzen AI Max+ APUs):
+1. **Absence of I/O Space in UEFI**: Unlike physical motherboard x16 desktop slots, host firmware on external bridges does not map legacy x86 I/O ports (`PCI Command bit 0 = 0`), allocating strictly Memory Space (BAR0).
+2. **Adaptive Memory-Only Normalization (`cmd = 0x2`)**: The engine enables Memory Space exclusively (`0x2`, keeping legacy IO bit 0 clear). This guarantees that UEFI `PciIo->Attributes(Enable, BUS_MASTER)` lands cleanly at `0x6` (Memory + Bus Master DMA), eliminating the `Bus Master enable failed: command=0x3 readback=0x6` assertion mismatch.
+3. **Seamless Windows Handoff**: Prior to Windows Boot Manager entry, register readback confirms mandatory `Memory (0x2)` and `BME (0x4)` flags, treating the legacy I/O bit as optional.
+4. **Verified Hardware**: Confirmed on **GMKtec EVO-X3 (AMD Ryzen AI Max+ 395 + Radeon 8060S iGPU)** + **MSI GeForce RTX 3080 Ti 12 GB (GA102)** over an OCuLink bus link at `65:00.0`.

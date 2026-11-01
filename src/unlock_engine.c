@@ -167,20 +167,20 @@ EFI_STATUS ExecuteGpuRamUnlock(DETECTED_GPU *gpu) {
       .pm_cap = Gu.pm_cap,
       .refs = 1};
 
-  /* Ensure IO (0x1) and Memory (0x2) are enabled, and Bus Master (0x4) is 0 before transaction claim */
+  /* Enable Memory (0x2), keep BME (0x4) and IO (0x1) cleared for eGPU/OCuLink compatibility (Issue #164) */
   UINT16 pci_cmd = 0;
   pci_st = gpu->pci_io->Pci.Read(gpu->pci_io, EfiPciIoWidthUint16, 4, 1, &pci_cmd);
   if (EFI_ERROR(pci_st)) {
     LogWrite("[Unlock] Error: Failed to read PCI command register: %#llx\n", (unsigned long long)pci_st);
     return pci_st;
   }
-  pci_cmd = (pci_cmd & ~0x0004) | 0x0003;
+  pci_cmd = (pci_cmd & ~0x0005) | 0x0002;
   pci_st = gpu->pci_io->Pci.Write(gpu->pci_io, EfiPciIoWidthUint16, 4, 1, &pci_cmd);
   if (EFI_ERROR(pci_st)) {
     LogWrite("[Unlock] Error: Failed to write PCI command register: %#llx\n", (unsigned long long)pci_st);
     return pci_st;
   }
-  LogWrite("[Unlock] PCI command prepared: %#x (IO/Memory=ENABLED, Bus Master=DISABLED)\n", pci_cmd);
+  LogWrite("[Unlock] PCI command prepared: %#x (Memory=ENABLED, IO/Bus Master=DISABLED)\n", pci_cmd);
 
   /* 3. Run V67 firmware transaction (FWSEC -> SEC2 Booter -> Selectors -> FLR)
    */

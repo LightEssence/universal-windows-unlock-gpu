@@ -123,7 +123,7 @@ static BOOLEAN ExtractVbiosFromHardwareBar0(DETECTED_GPU *gpu, EFI_FILE_HANDLE r
     EFI_STATUS s = gpu->pci_io->Pci.Read(gpu->pci_io, EfiPciIoWidthUint16, 4, 1, &orig_cmd);
     if (EFI_ERROR(s)) return FALSE;
 
-    UINT16 active_cmd = (orig_cmd & ~0x0004) | 0x0003;
+    UINT16 active_cmd = (orig_cmd & ~0x0005) | 0x0002;
     gpu->pci_io->Pci.Write(gpu->pci_io, EfiPciIoWidthUint16, 4, 1, &active_cmd);
 
     /* 2. Read first bytes from BAR0+0x300000 */

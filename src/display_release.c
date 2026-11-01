@@ -43,11 +43,14 @@ EFI_STATUS RestoreGpuPciDecode(DETECTED_GPU *gpu)
 
     LogWrite("[Decode] PCI Command before: %#x\n", cmd);
 
-    /* Bit 0: IO Space Enable (0x1), Bit 1: Memory Space Enable (0x2).
+    /* Bit 1: Memory Space Enable (0x2). Bit 0 (IO Space) is kept DISABLED (0x0)
+     * per joogle8888's OCuLink / eGPU analysis (Issue #164). On external PCIe / OCuLink
+     * topologies, IO space is unassigned by BIOS; writing bit 0 causes UEFI PciIo
+     * to drop IO when enabling Bus Master, leading to (Command | 4 != Now) assertion failure.
      * Bit 2 (Bus Master Enable) MUST BE 0 before Falcon transaction claim.
      * The transaction enables Bus Master itself when DMA buffers are mapped.
      */
-    cmd = (cmd & ~0x0004) | 0x0003;
+    cmd = (cmd & ~0x0005) | 0x0002;
     status = gpu->pci_io->Pci.Write(gpu->pci_io, EfiPciIoWidthUint16, 4, 1, &cmd);
     if (EFI_ERROR(status)) {
         LogWrite("[Decode] Failed to write PCI Command register (%#llx)\n", (unsigned long long)status);
@@ -124,7 +127,8 @@ EFI_STATUS ReconnectGpuDisplay(DETECTED_GPU *gpu)
             return s;
         }
 
-        UINT16 cmd_target = cmd_before | 0x0007; /* Enable IO, Memory, and Bus Master (DMA) */
+        /* Enable Bus Master (bit 2) and Memory Space (bit 1). Preserve IO Space (bit 0) if present */
+        UINT16 cmd_target = (cmd_before & ~0x0004) | 0x0006 | (cmd_before & 0x0001);
         s = gpu->pci_io->Pci.Write(gpu->pci_io, EfiPciIoWidthUint16, 4, 1, &cmd_target);
         if (EFI_ERROR(s)) {
             LogWrite("[Display] Error: Failed to write PCI Command register for handoff (%#llx)\n",
@@ -146,8 +150,11 @@ EFI_STATUS ReconnectGpuDisplay(DETECTED_GPU *gpu)
                  (cmd_readback & 0x2) ? 1 : 0,
                  (cmd_readback & 0x4) ? 1 : 0);
 
-        if ((cmd_readback & 0x0007) != 0x0007) {
-            LogWrite("[Display] Error: Hardware rejected PCI Command write! Readback: %#06x (expected & 0x7 == 0x7)\n",
+        /* Verify readback: Memory Space (bit 1) and Bus Master (bit 2) MUST be active.
+         * IO Space (bit 0) is optional and intentionally absent on eGPU / OCuLink topologies.
+         */
+        if ((cmd_readback & 0x0006) != 0x0006) {
+            LogWrite("[Display] Error: Hardware rejected PCI Command write! Readback: %#06x (expected Memory & BME: & 0x6 == 0x6)\n",
                      cmd_readback);
             return EFI_DEVICE_ERROR;
         }
