@@ -20,7 +20,6 @@
 | :--- | :--- | :---:| :---:| :---:| :---:|
 | **GPU 0: RTX 4070 Ti 12GB** <br>*(Ada Lovelace AD104, 60 SM)* | **BF16 Tensor Cores** <br>**FP16 Tensor Cores** <br>**FP32 CUDA Cores** | 75.0 TFLOPS <br>74.0 TFLOPS <br>28.0 TFLOPS | **146.94 TFLOPS** <br>**142.22 TFLOPS** <br>**28.30 TFLOPS** | **+95.9% (В 2 РАЗА БЫСТРЕЕ!)** 🔥 <br>**+92.2% прирост** 🔥 <br>Паритет (CUDA-ядра не зажаты) | `SS0=0x88888888` <br>`SS1=0x8` |
 | **GPU 1: RTX 3060 12GB** <br>*(Ampere GA106, 28 SM)* | **BF16 Tensor Cores** <br>**FP16 Tensor Cores** <br>**FP32 CUDA Cores** | 25.6 TFLOPS <br>25.6 TFLOPS <br>9.6 TFLOPS | **49.57 TFLOPS** <br>**48.07 TFLOPS** <br>**9.65 TFLOPS** | **+93.6% (В 2 РАЗА БЫСТРЕЕ!)** 🔥 <br>**+87.8% прирост** 🔥 <br>Паритет (CUDA-ядра не зажаты) | `SS0=0x88888888` <br>`SS1=0x8` |
-| **GPU: RTX 3080 Ti 12GB (eGPU)** <br>*(Ampere GA102, OCuLink bus 0x65, GMK EVO-X3)* | **BF16 Tensor Cores** <br>**FP16 Tensor Cores** <br>**TF32 Tensor Cores** <br>**FP32 Standard** | 67.2 TFLOPS <br>66.7 TFLOPS <br>33.8 TFLOPS <br>23.4 TFLOPS | **112.2 TFLOPS** <br>**109.4 TFLOPS** <br>**56.0 TFLOPS** <br>**23.1 TFLOPS** | **+67.0% (1.67x) прирост** 🔥 <br>**+64.0% (1.64x) прирост** 🔥 <br>**+65.7% (1.66x) прирост** 🔥 <br>Паритет (0.99x) | `SS0=0x88888888` <br>`SS1=0x8` |
 
 > [!NOTE]
 > **Физика процесса и снятие дросселирования (SS0 / SS1)**:
@@ -167,10 +166,15 @@ python tools/benchmark_multi_gpu.py
 
 ## Поддержка внешних видеокарт eGPU и OCuLink
 
-*(Исследование, отладка и валидация на платформе OCuLink: **joogle8888** в upstream [windows-GPU-UNLOCK#164](https://github.com/windows-GPU-UNLOCK/Windows-GPU-UNLOCK/issues/164) и [joogle8888/evo-x3-3080ti-unlock](https://github.com/joogle8888/evo-x3-3080ti-unlock))*
+*(Отчёт и отладка независимого исследователя: **joogle8888** в upstream [windows-GPU-UNLOCK#164](https://github.com/windows-GPU-UNLOCK/Windows-GPU-UNLOCK/issues/164) и [joogle8888/evo-x3-3080ti-unlock](https://github.com/joogle8888/evo-x3-3080ti-unlock))*
 
 При подключении видеокарты через внешние интерфейсы **OCuLink**, **Thunderbolt** или **USB4** (например, eGPU на мини-ПК вроде *GMKtec EVO-X3* с процессорами AMD Ryzen AI Max+):
 1. **Отсутствие I/O Space в UEFI**: В отличие от обычных настольных слотов x16, хост-прошивка материнской платы не выделяет внешней видеокарте устаревшие порты ввода-вывода x86 (`PCI Command bit 0 = 0`), конфигурируя исключительно пространство адресации памяти (Memory Space, BAR0).
-2. **Адаптивная нормализация декодирования (`cmd = 0x2`)**: Загрузчик активирует исключительно Memory Space (`0x2`, без принудительного включения устаревшего IO Space `0x1`). Это гарантирует, что системный вызов UEFI `PciIo->Attributes(Enable, BUS_MASTER)` успешно переводит регистр в `0x6` (Memory + Bus Master DMA), полностью устраняя assertion-ошибку `Bus Master enable failed: command=0x3 readback=0x6`.
+2. **Адаптивная нормализация декодирования (`cmd = 0x2`)**: Загрузчик активирует исключительно Memory Space (`0x2`, без принудительного включения устаревшего IO Space `0x1`). Это гарантирует, что системный вызов UEFI `PciIo->Attributes(Enable, BUS_MASTER)` переводит регистр в `0x6` (Memory + Bus Master DMA), исключая ошибку `Bus Master enable failed: command=0x3 readback=0x6`.
 3. **Бесшовная передача управления в Windows**: При подготовке к старту Windows Boot Manager проверка регистров подтверждает наличие обязательных битов `Memory (0x2)` и `BME (0x4)`, обрабатывая legacy I/O бит как опциональный.
-4. **Проверенное железо**: Успешно подтверждено на связке **GMKtec EVO-X3 (AMD Ryzen AI Max+ 395 + Radeon 8060S iGPU)** + **MSI GeForce RTX 3080 Ti 12 GB (GA102)** через порт OCuLink на шине `65:00.0`.
+4. **Аппаратный отчёт исследователя (joogle8888)**: Тестирование проводилось исследователем joogle8888 на связке **GMKtec EVO-X3 (AMD Ryzen AI Max+ 395 + Radeon 8060S iGPU)** + **MSI GeForce RTX 3080 Ti 12 GB (GA102)** через порт OCuLink на шине `65:00.0`.
+
+### Независимые замеры исследователя joogle8888 (cuBLAS GEMM 4096×4096):
+| Видеокарта & Конфигурация | Тест (cuBLAS GEMM) | СТОК (Завод) | С UEFI-АНЛОКОМ | Прирост / Разница |
+| :--- | :--- | :---:| :---:| :---:|
+| **RTX 3080 Ti 12GB (eGPU)** <br>*(Ampere GA102, OCuLink bus 0x65, GMK EVO-X3)* | **BF16 Tensor Cores** <br>**FP16 Tensor Cores** <br>**TF32 Tensor Cores** <br>**FP32 Standard** | 67.2 TFLOPS <br>66.7 TFLOPS <br>33.8 TFLOPS <br>23.4 TFLOPS | **112.2 TFLOPS** <br>**109.4 TFLOPS** <br>**56.0 TFLOPS** <br>**23.1 TFLOPS** | **+67.0% (1.67x) прирост** 🔥 <br>**+64.0% (1.64x) прирост** 🔥 <br>**+65.7% (1.66x) прирост** 🔥 <br>Паритет (0.99x) |
