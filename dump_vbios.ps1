@@ -93,25 +93,35 @@ foreach ($gpu in $gpus) {
             if (Test-Path $Nvflash) {
                 foreach ($candidateIdx in $candidateIndices) {
                     Write-Host "      Attempting nvflashk with --index=$candidateIdx ..."
-                    
-                    # Try --save
-                    & $Nvflash "--index=$candidateIdx" --save "$targetPath" 2>$null | Out-Null
-                    if (-not (Test-Path $targetPath)) {
-                        # Retry with -b
-                        & $Nvflash "--index=$candidateIdx" -b "$targetPath" 2>$null | Out-Null
-                    }
+                    $tempFile = [System.IO.Path]::Combine([System.IO.Path]::GetTempPath(), "nvflash_${PID}_${index}_${candidateIdx}.rom")
+                    if (Test-Path $tempFile) { Remove-Item $tempFile -Force -ErrorAction SilentlyContinue }
 
-                    if (Test-Path $targetPath) {
-                        $foundDev = Get-VbiosDevId $targetPath
-                        if ($foundDev -eq $devId) {
-                            $sizeKb = [math]::Round((Get-Item $targetPath).Length / 1KB, 1)
-                            Write-Host "      [SUCCESS] Verified VBIOS dump for DevID 0x$devId via nvflashk --index=$candidateIdx ($sizeKb KB)" -ForegroundColor Green
-                            $dumpSuccess = $true
-                            break
+                    try {
+                        # Try --save
+                        & $Nvflash "--index=$candidateIdx" --save "$tempFile" 2>$null | Out-Null
+                        if (-not (Test-Path $tempFile) -or (Get-Item $tempFile).Length -eq 0) {
+                            if (Test-Path $tempFile) { Remove-Item $tempFile -Force -ErrorAction SilentlyContinue }
+                            # Retry with -b
+                            & $Nvflash "--index=$candidateIdx" -b "$tempFile" 2>$null | Out-Null
                         }
-                        else {
-                            Write-Host "      [MISMATCH] nvflashk index $candidateIdx returned DevID 0x$foundDev (expected 0x$devId). Discarding..." -ForegroundColor Yellow
-                            Remove-Item $targetPath -Force -ErrorAction SilentlyContinue
+
+                        if ((Test-Path $tempFile) -and (Get-Item $tempFile).Length -gt 0) {
+                            $foundDev = Get-VbiosDevId $tempFile
+                            if ($foundDev -eq $devId) {
+                                $sizeKb = [math]::Round((Get-Item $tempFile).Length / 1KB, 1)
+                                Move-Item -Path $tempFile -Destination $targetPath -Force
+                                Write-Host "      [SUCCESS] Verified VBIOS dump for DevID 0x$devId via nvflashk --index=$candidateIdx ($sizeKb KB)" -ForegroundColor Green
+                                $dumpSuccess = $true
+                                break
+                            }
+                            else {
+                                Write-Host "      [MISMATCH] nvflashk index $candidateIdx returned DevID 0x$foundDev (expected 0x$devId). Discarding..." -ForegroundColor Yellow
+                            }
+                        }
+                    }
+                    finally {
+                        if (Test-Path $tempFile) {
+                            Remove-Item $tempFile -Force -ErrorAction SilentlyContinue
                         }
                     }
                 }

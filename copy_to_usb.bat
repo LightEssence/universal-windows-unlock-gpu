@@ -45,7 +45,15 @@ echo.
 
 if exist "%~dp0dist\*" (
     echo [1/4] Copying EFI loader...
+    if exist "!DRIVE!\EFI\BOOT\BOOTX64.EFI" (
+        copy /Y "!DRIVE!\EFI\BOOT\BOOTX64.EFI" "!DRIVE!\EFI\BOOT\BOOTX64.EFI.bak" >nul 2>&1
+    )
     xcopy /E /I /Y "%~dp0dist\*" "!DRIVE!\" >nul
+    if errorlevel 1 (
+        echo [ERROR] Failed to copy EFI loader to !DRIVE!\
+        pause
+        exit /b 1
+    )
 )
 
 if not exist "!DRIVE!\EFI\ASSETS" mkdir "!DRIVE!\EFI\ASSETS" >nul 2>&1
@@ -53,11 +61,21 @@ if not exist "!DRIVE!\EFI\ASSETS" mkdir "!DRIVE!\EFI\ASSETS" >nul 2>&1
 if exist "%~dp0UNIVERSAL-ASSETS\*" (
     echo [2/4] Copying firmware assets to \EFI\ASSETS\...
     xcopy /E /I /Y "%~dp0UNIVERSAL-ASSETS\*" "!DRIVE!\EFI\ASSETS\" >nul
+    if errorlevel 1 (
+        echo [ERROR] Failed to copy assets to !DRIVE!\EFI\ASSETS\
+        pause
+        exit /b 1
+    )
 )
 
 if exist "%~dp0EFI\*" (
     echo [3/4] Copying VBIOS...
     xcopy /E /I /Y "%~dp0EFI\*" "!DRIVE!\EFI\" >nul
+    if errorlevel 1 (
+        echo [ERROR] Failed to copy EFI directory to !DRIVE!\EFI\
+        pause
+        exit /b 1
+    )
 )
 
 echo [4/4] Copying Windows utilities...

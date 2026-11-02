@@ -55,8 +55,14 @@ static EFI_STATUS ReadAssetFile(EFI_FILE_HANDLE root, const CHAR16 *dir_name, co
     UINT64 info_words[128];
     UINTN info_bytes = sizeof(info_words);
     s = f->GetInfo(f, &InfoGuid, &info_bytes, info_words);
+    if (EFI_ERROR(s)) {
+        LogWrite("[Assets] GetInfo failed for '%ls' (status=%#llx)\n",
+                 path, (unsigned long long)s);
+        f->Close(f);
+        return s;
+    }
     EFI_FILE_INFO *info = (EFI_FILE_INFO *)info_words;
-    if (EFI_ERROR(s) || info->FileSize != expected || (info->Attribute & EFI_FILE_DIRECTORY)) {
+    if (info->FileSize != expected || (info->Attribute & EFI_FILE_DIRECTORY)) {
         LogWrite("[Assets] Size mismatch '%ls': got %llu, expected %llu\n",
                  path, (unsigned long long)info->FileSize, (unsigned long long)expected);
         f->Close(f);

@@ -35,12 +35,18 @@ if not exist "%~dp0EFI\VBIOS" mkdir "%~dp0EFI\VBIOS"
 
 for %%I in (0 1 2 3) do (
     echo [i] Attempting VBIOS dump from adapter index %%I...
-    "!NVFLASH!" --index=%%I --save "%~dp0EFI\VBIOS\gpu_adapter_%%I.rom" >nul 2>&1
-    if not exist "%~dp0EFI\VBIOS\gpu_adapter_%%I.rom" (
-        "!NVFLASH!" --index=%%I -b "%~dp0EFI\VBIOS\gpu_adapter_%%I.rom" >nul 2>&1
+    set "TMPROM=%TEMP%\nvflash_%RANDOM%_%%I.rom"
+    if exist "!TMPROM!" del /f /q "!TMPROM!" >nul 2>&1
+    "!NVFLASH!" --index=%%I --save "!TMPROM!" >nul 2>&1
+    if not exist "!TMPROM!" (
+        "!NVFLASH!" --index=%%I -b "!TMPROM!" >nul 2>&1
     )
-    if exist "%~dp0EFI\VBIOS\gpu_adapter_%%I.rom" (
-        echo [SUCCESS] Adapter %%I saved to EFI\VBIOS\gpu_adapter_%%I.rom
+    if exist "!TMPROM!" (
+        for %%F in ("!TMPROM!") do if %%~zF GTR 0 (
+            move /y "!TMPROM!" "%~dp0EFI\VBIOS\gpu_adapter_%%I.rom" >nul 2>&1
+            echo [SUCCESS] Adapter %%I saved to EFI\VBIOS\gpu_adapter_%%I.rom
+        )
+        if exist "!TMPROM!" del /f /q "!TMPROM!" >nul 2>&1
     )
 )
 

@@ -16,6 +16,14 @@ EFI_STATUS LoggerInit(EFI_HANDLE image_handle);
 VOID LogWrite(CONST CHAR8 *format, ...);
 
 /**
+ * Enables or disables streaming of log messages to UEFI screen console.
+ * Must be disabled when releasing/disconnecting GOP controllers to prevent
+ * re-entering invalid or detached display console paths.
+ */
+VOID LogSetConsoleOutput(BOOLEAN enabled);
+BOOLEAN LogGetConsoleOutput(VOID);
+
+/**
  * Closes the log file before Windows boot.
  */
 VOID LoggerClose(VOID);

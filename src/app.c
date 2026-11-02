@@ -368,6 +368,24 @@ EFI_STATUS EFIAPI UefiMain(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable
             LogWrite("\n>>> [PASS 1] Unlocking Secondary GPU %u (%ls) Bus %u:%u.%u...\n",
                      (unsigned)i, gpu->model_name, (unsigned)gpu->bus, (unsigned)gpu->device, (unsigned)gpu->function);
 
+            /* Secondary does not automatically mean headless! If an Option ROM driver or GOP
+             * is bound to the secondary adapter, it must be explicitly released first.
+             */
+            if (gpu->is_display_adapter || gpu->has_active_gop || gpu->is_console_display) {
+                LogWrite("[Release] Secondary GPU %u has active display driver/GOP attached. Releasing before unlock...\n",
+                         (unsigned)i);
+                EFI_STATUS r_stat = ReleaseGpuDisplay(gpu);
+                if (EFI_ERROR(r_stat)) {
+                    LogWrite("[Unlock] Refusing secondary GPU %u: failed to release active display (status=%#llx)\n",
+                             (unsigned)i, (unsigned long long)r_stat);
+                    any_failed = TRUE;
+                    continue;
+                }
+            } else {
+                /* Pure headless card: mark display released */
+                gpu->display_released = TRUE;
+            }
+
             EFI_STATUS u_stat = ExecuteGpuRamUnlock(gpu);
             if (!EFI_ERROR(u_stat) && gpu->unlocked_success) {
                 LogWrite("[Unlock] GPU %u unlocked successfully! SS0=0x88888888 SS1=0x8\n", (unsigned)i);
@@ -429,6 +447,14 @@ EFI_STATUS EFIAPI UefiMain(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable
                         if (EFI_ERROR(rc_stat)) {
                             LogWrite("[Display] ReconnectGpuDisplay returned status=%#llx\n",
                                      (unsigned long long)rc_stat);
+                            any_failed = TRUE;
+                            if (rc_stat == EFI_DEVICE_ERROR) {
+                                unsafe_state = TRUE;
+                                LogWrite("[FATAL] Hardware rejected PCI command handoff priming on GPU %u\n",
+                                         (unsigned)primary_display_idx);
+                                PrintColor(EFI_LIGHTRED | EFI_BLACK,
+                                           L"\r\n[FATAL ERROR] GPU hardware rejected PCI command handoff priming!\r\n");
+                            }
                         }
                     } else {
                         LogWrite("[Display] Suppressed ReconnectGpuDisplay due to unsafe hardware state\n");

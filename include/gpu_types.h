@@ -49,6 +49,7 @@ typedef struct {
     BOOLEAN is_display_adapter;  /* Has any UEFI driver bound (BY_DRIVER/BY_CHILD_CONTROLLER) */
     BOOLEAN has_active_gop;      /* Has EFI_GRAPHICS_OUTPUT_PROTOCOL with nonzero resolution */
     BOOLEAN is_console_display;  /* Specifically driving active UEFI text/graphics console */
+    BOOLEAN display_released;    /* GOP / firmware driver has been safely disconnected */
     BOOLEAN unlock_selected;
     BOOLEAN unlocked_success;
 } DETECTED_GPU;

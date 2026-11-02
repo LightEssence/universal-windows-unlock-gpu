@@ -38,6 +38,18 @@ if (-not $isAdmin) {
 
 $ClassGuid = "{4d36e968-e325-11ce-bfc1-08002be10318}"
 $BasePath = "HKLM:\SYSTEM\CurrentControlSet\Control\Class\$ClassGuid"
+$backupFile = Join-Path $PSScriptRoot "laptop_hybrid_backup.json"
+$backupData = @{}
+if (Test-Path $backupFile) {
+    try {
+        $rawBackup = (Get-Content $backupFile -Raw | ConvertFrom-Json)
+        $ht = @{}
+        $rawBackup.PSObject.Properties | ForEach-Object { $ht[$_.Name] = $_.Value }
+        $backupData = $ht
+    } catch {
+        $backupData = @{}
+    }
+}
 
 if (-not (Test-Path $BasePath)) {
     Write-Host "[ERROR] Display adapter class registry key not found: $BasePath" -ForegroundColor Red
@@ -79,13 +91,33 @@ foreach ($sub in $subkeys) {
         }
 
         if ($Restore) {
-            if ($null -ne $currentVal) {
-                Remove-ItemProperty -Path $sub.PSPath -Name "EnableRuntimePowerManagement" -Force -ErrorAction SilentlyContinue
-                Write-Host "    [RESTORED] Removed EnableRuntimePowerManagement (reverted to system default)" -ForegroundColor Yellow
+            if ($backupData.ContainsKey($keyName)) {
+                $rec = $backupData[$keyName]
+                if ($rec.Exists -and $null -ne $rec.Value) {
+                    Set-ItemProperty -Path $sub.PSPath -Name "EnableRuntimePowerManagement" -Value ([int]$rec.Value) -Type DWord -Force
+                    Write-Host "    [RESTORED] Restored EnableRuntimePowerManagement to original value: $($rec.Value)" -ForegroundColor Green
+                } else {
+                    Remove-ItemProperty -Path $sub.PSPath -Name "EnableRuntimePowerManagement" -Force -ErrorAction SilentlyContinue
+                    Write-Host "    [RESTORED] Removed EnableRuntimePowerManagement (property did not exist originally)" -ForegroundColor Yellow
+                }
+                $backupData.Remove($keyName)
             } else {
-                Write-Host "    [INFO] Key was already at default state." -ForegroundColor Gray
+                if ($null -ne $currentVal) {
+                    Remove-ItemProperty -Path $sub.PSPath -Name "EnableRuntimePowerManagement" -Force -ErrorAction SilentlyContinue
+                    Write-Host "    [RESTORED] Removed EnableRuntimePowerManagement (reverted to system default)" -ForegroundColor Yellow
+                } else {
+                    Write-Host "    [INFO] Key was already at default state." -ForegroundColor Gray
+                }
             }
         } else {
+            # Backup original state before modifying if not already saved
+            if (-not $backupData.ContainsKey($keyName)) {
+                $backupData[$keyName] = @{
+                    Exists = ($null -ne $currentVal)
+                    Value = $currentVal
+                }
+            }
+
             Set-ItemProperty -Path $sub.PSPath -Name "EnableRuntimePowerManagement" -Value 0 -Type DWord -Force
             $verify = (Get-ItemProperty -Path $sub.PSPath -Name "EnableRuntimePowerManagement").EnableRuntimePowerManagement
             if ($verify -eq 0) {
@@ -94,6 +126,20 @@ foreach ($sub in $subkeys) {
             } else {
                 Write-Host "    [FAIL] Failed to verify value write." -ForegroundColor Red
             }
+        }
+    }
+}
+
+if (-not $CheckOnly) {
+    if ($Restore) {
+        if ($backupData.Count -eq 0) {
+            if (Test-Path $backupFile) { Remove-Item $backupFile -Force -ErrorAction SilentlyContinue }
+        } else {
+            $backupData | ConvertTo-Json -Depth 3 | Set-Content $backupFile -Force
+        }
+    } else {
+        if ($backupData.Count -gt 0) {
+            $backupData | ConvertTo-Json -Depth 3 | Set-Content $backupFile -Force
         }
     }
 }
@@ -110,4 +156,3 @@ if ($foundCount -eq 0) {
         Write-Host "======================================================================" -ForegroundColor Cyan
     }
 }
-

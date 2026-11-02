@@ -11,13 +11,41 @@
 static DETECTED_GPU *g_current_unlock_gpu = NULL;
 
 static BOOLEAN CheckGpuDisplayAndOwnershipOk(VOID) {
-  if (!g_current_unlock_gpu || !g_current_unlock_gpu->pci_io) return FALSE;
+  if (!g_current_unlock_gpu || !g_current_unlock_gpu->pci_io || !g_current_unlock_gpu->handle) return FALSE;
+
+  /* 1. Memory decode must be active, Bus Master must be disabled */
   UINT16 cmd = 0;
   EFI_STATUS s = g_current_unlock_gpu->pci_io->Pci.Read(
       g_current_unlock_gpu->pci_io, EfiPciIoWidthUint16, 4, 1, &cmd);
   if (EFI_ERROR(s)) return FALSE;
-  /* Memory decode must be active, Bus Master must be disabled */
   if ((cmd & 0x0002) == 0 || (cmd & 0x0004) != 0) return FALSE;
+
+  /* 2. Display adapters or GOP holders MUST have been explicitly released */
+  if (g_current_unlock_gpu->is_display_adapter || g_current_unlock_gpu->has_active_gop || g_current_unlock_gpu->is_console_display) {
+    if (!g_current_unlock_gpu->display_released) {
+      LogWrite("[Unlock] Ownership check rejected: GPU has active GOP/display driver that has not been released\n");
+      return FALSE;
+    }
+  }
+
+  /* 3. Query OpenProtocolInformation to confirm no third-party driver holds the device */
+  EFI_GUID PciIoGuid = EFI_PCI_IO_PROTOCOL_GUID;
+  EFI_OPEN_PROTOCOL_INFORMATION_ENTRY *entries = NULL;
+  UINTN count = 0;
+  s = gBS->OpenProtocolInformation(g_current_unlock_gpu->handle, &PciIoGuid, &entries, &count);
+  if (!EFI_ERROR(s) && entries) {
+    for (UINTN i = 0; i < count; i++) {
+      if ((entries[i].Attributes & EFI_OPEN_PROTOCOL_BY_DRIVER) ||
+          (entries[i].Attributes & EFI_OPEN_PROTOCOL_EXCLUSIVE)) {
+        LogWrite("[Unlock] Ownership check rejected: handle held by driver (attrib=%#x)\n",
+                 entries[i].Attributes);
+        gBS->FreePool(entries);
+        return FALSE;
+      }
+    }
+    gBS->FreePool(entries);
+  }
+
   return TRUE;
 }
 
@@ -149,7 +177,12 @@ EFI_STATUS ExecuteGpuRamUnlock(DETECTED_GPU *gpu) {
     return EFI_DEVICE_ERROR;
   }
 
-  /* 3. Mark profile, ownership and display check */
+  /* 3. Verify driver release and ownership before arming transaction */
+  if (!CheckGpuDisplayAndOwnershipOk()) {
+    LogWrite("[Unlock] Error: Display release / driver ownership verification failed for GPU\n");
+    return EFI_ACCESS_DENIED;
+  }
+
   Gu.profile_verified = TRUE;
   Gu.owned = TRUE;
   Gu.armed = TRUE;

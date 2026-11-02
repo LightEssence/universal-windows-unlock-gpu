@@ -296,7 +296,7 @@ VOID GuStall(UINTN Microseconds) {
 }
 EFI_STATUS GuEnableMaster(VOID) {
   UINT32 Id = 0;
-  UINT16 Command = 0xffff, Now = 0xffff;
+  UINT16 Command = 0xffff, Now = 0xffff, TrueOriginalCommand = 0xffff;
   UINT64 Supported = 0, Before = 0, After = 0, Decode;
   EFI_STATUS Status = EFI_ACCESS_DENIED;
   if (GU_PREFLIGHT_ONLY || !Gu.profile_verified || Gu.fault || Gu.retained ||
@@ -310,6 +310,7 @@ EFI_STATUS GuEnableMaster(VOID) {
   Status = RawRead(EfiPciIoWidthUint16, 4, &Command);
   if (EFI_ERROR(Status) || Command == 0xffff || (Command & 4) || !(Command & 2))
     goto fail;
+  TrueOriginalCommand = Command;
   Status = Gu.pci->Attributes(Gu.pci, EfiPciIoAttributeOperationSupported, 0,
                               &Supported);
   if (EFI_ERROR(Status) || !(Supported & EFI_PCI_IO_ATTRIBUTE_BUS_MASTER))
@@ -325,7 +326,15 @@ EFI_STATUS GuEnableMaster(VOID) {
     if (Before & EFI_PCI_IO_ATTRIBUTE_IO) sync_cmd |= 1;
     if (Before & EFI_PCI_IO_ATTRIBUTE_MEMORY) sync_cmd |= 2;
     if (sync_cmd != Command) {
-      Gu.pci->Pci.Write(Gu.pci, EfiPciIoWidthUint16, 4, 1, &sync_cmd);
+      Status = Gu.pci->Pci.Write(Gu.pci, EfiPciIoWidthUint16, 4, 1, &sync_cmd);
+      if (EFI_ERROR(Status))
+        goto fail;
+      UINT16 sync_check = 0;
+      Status = RawRead(EfiPciIoWidthUint16, 4, &sync_check);
+      if (EFI_ERROR(Status) || sync_check != sync_cmd) {
+        Status = EFI_DEVICE_ERROR;
+        goto fail;
+      }
       Command = sync_cmd;
       Decode = (Command & 1 ? EFI_PCI_IO_ATTRIBUTE_IO : 0) |
                (Command & 2 ? EFI_PCI_IO_ATTRIBUTE_MEMORY : 0);
@@ -338,7 +347,7 @@ EFI_STATUS GuEnableMaster(VOID) {
     goto fail;
   }
   Gu.master_original_attributes = Before;
-  Gu.master_original_command = Command;
+  Gu.master_original_command = TrueOriginalCommand;
   Gu.master_pci = Gu.pci;
 #ifdef GU_ENTRY_LATCHED
   /* No logging/callback window between this final comparison and enabling BME.
@@ -415,9 +424,9 @@ EFI_STATUS GuClearMaster(VOID) {
   Status = RawRead(EfiPciIoWidthUint16, 4, &Command);
   if (EFI_ERROR(Status) || Command == 0xffff)
     goto fail;
-  if (Command & 4) {
-    Command &= (UINT16)~4U;
-    Status = Gu.pci->Pci.Write(Gu.pci, EfiPciIoWidthUint16, 4, 1, &Command);
+  UINT16 TargetCommand = (UINT16)(Gu.master_original_command & ~4U);
+  if ((Command & 4) || (Gu.master_attributes_pending && Command != TargetCommand)) {
+    Status = Gu.pci->Pci.Write(Gu.pci, EfiPciIoWidthUint16, 4, 1, &TargetCommand);
     if (EFI_ERROR(Status))
       goto fail;
   }
@@ -425,7 +434,7 @@ EFI_STATUS GuClearMaster(VOID) {
   if (EFI_ERROR(Status) || Now == 0xffff || (Now & 4))
     goto fail;
   /* Do not silently repair unrelated bits changed by the bus driver's API. */
-  if (Gu.master_attributes_pending && Now != Gu.master_original_command)
+  if (Gu.master_attributes_pending && Now != TargetCommand)
     goto fail;
   Gu.master_last_command = Now;
   if (EFI_ERROR(AttributeStatus)) {

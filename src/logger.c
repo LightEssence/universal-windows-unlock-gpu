@@ -7,6 +7,17 @@ static EFI_GUID SimpleFileSystemProtocolGuid = EFI_SIMPLE_FILE_SYSTEM_PROTOCOL_G
 
 static EFI_FILE_HANDLE g_LogFile = NULL;
 static CHAR16 g_LogPath[64] = { 0 };
+static BOOLEAN g_ConsoleOutputEnabled = TRUE;
+
+VOID LogSetConsoleOutput(BOOLEAN enabled)
+{
+    g_ConsoleOutputEnabled = enabled;
+}
+
+BOOLEAN LogGetConsoleOutput(VOID)
+{
+    return g_ConsoleOutputEnabled;
+}
 
 EFI_STATUS LoggerInit(EFI_HANDLE image_handle)
 {
@@ -72,7 +83,7 @@ EFI_STATUS LoggerInit(EFI_HANDLE image_handle)
 
 static VOID ConsolePrintAscii(CONST CHAR8 *str, size_t len)
 {
-    if (!gST || !gST->ConOut || !gST->ConOut->OutputString) return;
+    if (!g_ConsoleOutputEnabled || !gST || !gST->ConOut || !gST->ConOut->OutputString || !str || len == 0) return;
 
     CHAR16 wide_buf[256];
     size_t w_idx = 0;

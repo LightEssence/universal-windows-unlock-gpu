@@ -11,10 +11,14 @@ EFI_STATUS ReleaseGpuDisplay(DETECTED_GPU *gpu)
 
     /* If this GPU is not holding GOP display console, no need to touch display drivers! */
     if (!gpu->is_display_adapter) {
+        gpu->display_released = TRUE;
         return EFI_SUCCESS;
     }
 
-    LogWrite("[Release] Disconnecting UEFI GOP controller from handle...\n");
+    LogWrite("[Release] Disconnecting UEFI GOP controller from handle (switching to file-only logging)...\n");
+
+    /* Switch to file-only logging BEFORE disconnecting controller to avoid printing to dead console */
+    LogSetConsoleOutput(FALSE);
 
     /* Standard UEFI DisconnectController - completely board-agnostic */
     EFI_STATUS status = gBS->DisconnectController(gpu->handle, NULL, NULL);
@@ -22,6 +26,8 @@ EFI_STATUS ReleaseGpuDisplay(DETECTED_GPU *gpu)
         LogWrite("[Release] Error: DisconnectController failed: %#llx\n", (unsigned long long)status);
         return status;
     }
+
+    gpu->display_released = TRUE;
 
     /* Restore PCI Command register so MMIO / DMA continue functioning */
     return RestoreGpuPciDecode(gpu);
@@ -182,7 +188,7 @@ EFI_STATUS ReconnectGpuDisplay(DETECTED_GPU *gpu)
     EFI_STATUS status = gBS->ConnectController(gpu->handle, NULL, NULL, force_recursive);
     LogWrite("[Display] ConnectController on GPU handle returned status=%#llx\n", (unsigned long long)status);
 
-    if (force_recursive && !EFI_ERROR(status)) {
+    if (!EFI_ERROR(status)) {
         if (gST && gST->ConsoleOutHandle) {
             LogWrite("[Display] Reconnecting ConsoleOutHandle...\n");
             gBS->ConnectController(gST->ConsoleOutHandle, NULL, NULL, TRUE);
@@ -191,6 +197,7 @@ EFI_STATUS ReconnectGpuDisplay(DETECTED_GPU *gpu)
             LogWrite("[Display] Resetting console...\n");
             gST->ConOut->Reset(gST->ConOut, FALSE);
             gST->ConOut->SetAttribute(gST->ConOut, EFI_LIGHTGRAY | EFI_BLACK);
+            LogSetConsoleOutput(TRUE);
         }
     }
 
